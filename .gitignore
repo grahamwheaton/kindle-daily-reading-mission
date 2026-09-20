@@ -1,0 +1,24 @@
+# Device/user data and recovery material
+backups/
+private/
+recovery/
+research/
+tools/
+
+# Generated reading content and ebook output
+missions/
+*.mobi
+*.azw*
+
+# Third-party downloaded binaries and generated Kindle packages
+installer/payload/
+installer/verify-extract/
+installer/*.bin
+installer/run.sh
+installer/uninstall.sh
+
+# Local/editor noise
+.DS_Store
+Thumbs.db
+*.log
+
