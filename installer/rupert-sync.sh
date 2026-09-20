@@ -3,7 +3,8 @@
 BASE_URL='https://raw.githubusercontent.com/grahamwheaton/rupert-reading-missions/master/published'
 RUNTIME=/usr/local/rupert
 STATE=/mnt/us/rupert-mission
-DOCUMENT="/mnt/us/documents/Today's Reading Mission.mobi"
+DOCUMENT=/mnt/us/documents/RupertsMission.mobi
+ARCHIVE="$STATE/archive"
 LOG="$STATE/sync.log"
 LOCK=/tmp/rupert-mission-sync.lock
 CURL="$RUNTIME/curl"
@@ -11,7 +12,7 @@ CA="$RUNTIME/cacert.pem"
 
 mkdir "$LOCK" 2>/dev/null || exit 0
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
-mkdir -p "$STATE"
+mkdir -p "$STATE" "$ARCHIVE"
 
 log() {
     echo "$(date) $*" >> "$LOG"
@@ -37,6 +38,9 @@ echo "$WIFI_STATE" | grep -q CONNECTED || {
     exit 0
 }
 
+# Check the separately signed, allowlisted application update channel.
+[ -x "$RUNTIME/device-update.sh" ] && "$RUNTIME/device-update.sh" >/dev/null 2>&1 || true
+
 fetch() {
     "$CURL" --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
         --connect-timeout 20 --max-time 90 --cacert "$CA" -o "$1" "$2"
@@ -44,7 +48,8 @@ fetch() {
 
 STAMP="$STATE/date.part"
 BOOK="$STATE/today.mobi.part"
-rm -f "$STAMP" "$BOOK"
+META="$STATE/launcher.properties.part"
+rm -f "$STAMP" "$BOOK" "$META"
 
 if ! fetch "$STAMP" "$BASE_URL/date.txt" >> "$LOG" 2>&1; then
     log 'mission ID download failed'
@@ -67,6 +72,12 @@ if ! fetch "$BOOK" "$BASE_URL/today.mobi" >> "$LOG" 2>&1; then
     exit 0
 fi
 
+if ! fetch "$META" "$BASE_URL/launcher.properties" >> "$LOG" 2>&1; then
+    log 'launcher metadata download failed'
+    rm -f "$BOOK" "$META"
+    exit 0
+fi
+
 SIZE=$(wc -c < "$BOOK")
 if [ "$SIZE" -lt 1024 ]; then
     log "mission rejected: only $SIZE bytes"
@@ -74,7 +85,14 @@ if [ "$SIZE" -lt 1024 ]; then
     exit 0
 fi
 
+OLD_ID=$(cat "$STATE/last-remote-id" 2>/dev/null)
+if [ -n "$OLD_ID" ] && [ -f "$DOCUMENT" ]; then
+    cp "$DOCUMENT" "$ARCHIVE/$OLD_ID.mobi"
+    [ -f "$STATE/launcher.properties" ] && cp "$STATE/launcher.properties" "$ARCHIVE/$OLD_ID.properties"
+fi
+
 mv -f "$BOOK" "$DOCUMENT"
+mv -f "$META" "$STATE/launcher.properties"
 echo "$REMOTE_ID" > "$STATE/last-remote-id"
 log "installed mission $REMOTE_ID ($SIZE bytes)"
 

@@ -2,6 +2,7 @@ package uk.co.beaverland.rupertreader;
 
 import com.amazon.kindle.kindlet.AbstractKindlet;
 import com.amazon.kindle.kindlet.KindletContext;
+import com.besteffortlabs.kindletshell.RuntimePermissions;
 import java.awt.Canvas;
 import java.awt.Color;
 import java.awt.Container;
@@ -17,6 +18,7 @@ import java.io.FileReader;
 public final class RupertReader extends AbstractKindlet {
     private KindletContext context;
     private ReaderCanvas canvas;
+    private final RuntimePermissions permissions = new RuntimePermissions();
 
     public void create(KindletContext value) {
         context = value;
@@ -29,6 +31,8 @@ public final class RupertReader extends AbstractKindlet {
 
     public void start() {
         if (canvas != null) {
+            boolean allowed = permissions.acquire();
+            try { context.setSubTitle(allowed ? "Ready" : "Permission setup required"); } catch (Throwable ignored) { }
             canvas.reload();
             canvas.requestFocus();
             canvas.repaint();
@@ -36,7 +40,7 @@ public final class RupertReader extends AbstractKindlet {
     }
 
     public void stop() { }
-    public void destroy() { canvas = null; context = null; }
+    public void destroy() { permissions.release(); canvas = null; context = null; }
 
     private static final class ReaderCanvas extends Canvas implements KeyListener {
         private final KindletContext context;

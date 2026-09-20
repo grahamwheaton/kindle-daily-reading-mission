@@ -10,5 +10,10 @@ SDK jar is not included. The shared MobileRead jailbreak developer keystore is
 also not redistributed here. Point `build.ps1` at a compatible copy when
 building.
 
+The pinned `vendor/shairkindle` submodule supplies its MIT-licensed,
+real-device-tested ixtab/MKK runtime permission gateway. Its compile-time
+`ParseException` stub is never packaged; the patched MKK copy on the Kindle is
+the actual gateway.
+
 Do not enable auto-start or kiosk behaviour until the manually launched build
 has been tested on the physical K4 and the Home escape has been confirmed.

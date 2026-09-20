@@ -22,3 +22,4 @@ installer/uninstall.sh
 Thumbs.db
 *.log
 launcher/out/
+bootstrap/stage/

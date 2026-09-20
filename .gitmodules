@@ -1,0 +1,3 @@
+[submodule "vendor/shairkindle"]
+	path = vendor/shairkindle
+	url = https://github.com/best-effort-labs/shairkindle.git
