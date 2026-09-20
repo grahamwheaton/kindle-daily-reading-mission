@@ -1,0 +1,8 @@
+Manifest-Version: 1.0
+SDK-Specification-Version: 1.0
+Implementation-Title: Rupert's Reader
+Implementation-Version: 0.1.0
+Implementation-Vendor: Graham Wheaton
+Extension-List: SDK
+SDK-Extension-Name: com.amazon.kindle.kindlet
+Main-Class: uk.co.beaverland.rupertreader.RupertReader

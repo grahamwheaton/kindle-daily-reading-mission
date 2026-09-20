@@ -21,4 +21,4 @@ installer/uninstall.sh
 .DS_Store
 Thumbs.db
 *.log
-
+launcher/out/
