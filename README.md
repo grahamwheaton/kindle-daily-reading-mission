@@ -74,6 +74,7 @@ its library after it is safely ejected and disconnected.
 
 | Date | Title | Type | Output | Delivery |
 | --- | --- | --- | --- | --- |
+| 2026-09-21 | *Rupert and Tom's Trail Map* | Fiction | `missions/2026-09-21-rupert-and-toms-trail-map/Rupert and Tom's Trail Map.mobi` | Published to GitHub for Kindle Wi-Fi delivery |
 | 2026-09-20 | *The Mud Runner Rescue* | Fiction | `missions/001-mud-runner-rescue/The Mud Runner Rescue.mobi` | Published to GitHub and fetched independently by Kindle Wi-Fi |
 
 ## Automatic Wi-Fi delivery

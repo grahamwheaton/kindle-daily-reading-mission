@@ -27,19 +27,12 @@ New-Item -ItemType Directory -Force -Path $stubsOut,$classesOut | Out-Null
 $stubSources = @(Get-ChildItem -LiteralPath (Join-Path $here 'stubs') -Recurse -Filter '*.java' | ForEach-Object FullName)
 $appSources = @(Get-ChildItem -LiteralPath (Join-Path $here 'src') -Recurse -Filter '*.java' | ForEach-Object FullName)
 $vendor = Join-Path $project 'vendor\shairkindle\kindlet'
-$gatewayStub = Join-Path $vendor 'stubs\org\json\simple\parser\ParseException.java'
-$gatewaySources = @(
-    (Join-Path $vendor 'src\ixtab\jailbreak\JailbreakConstants.java'),
-    (Join-Path $vendor 'src\ixtab\jailbreak\Jailbreak.java'),
-    (Join-Path $vendor 'src\com\besteffortlabs\kindletshell\RuntimePermissions.java')
-)
-
-& $java -cp $ecj org.eclipse.jdt.internal.compiler.batch.Main -source 1.4 -target 1.4 -nowarn -d $stubsOut @stubSources $gatewayStub
+& $java -cp $ecj org.eclipse.jdt.internal.compiler.batch.Main -source 1.4 -target 1.4 -nowarn -d $stubsOut @stubSources
 if ($LASTEXITCODE -ne 0) { throw 'Stub compilation failed.' }
-& $java -cp $ecj org.eclipse.jdt.internal.compiler.batch.Main -source 1.4 -target 1.4 -nowarn -classpath $stubsOut -d $classesOut @gatewaySources @appSources
+& $java -cp $ecj org.eclipse.jdt.internal.compiler.batch.Main -source 1.4 -target 1.4 -nowarn -classpath $stubsOut -d $classesOut @appSources
 if ($LASTEXITCODE -ne 0) { throw 'Launcher compilation failed.' }
 
-& $jar cfm $app (Join-Path $here 'META-INF\MANIFEST.MF') -C $classesOut .
+& $jar cfm $app (Join-Path $here 'META-INF\MANIFEST.MF') -C $classesOut . -C $here KindleLauncher.jpg
 if ($LASTEXITCODE -ne 0) { throw 'Kindlet packaging failed.' }
 
 foreach ($alias in @('ditest','dktest','dntest')) {

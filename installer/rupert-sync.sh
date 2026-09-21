@@ -9,14 +9,41 @@ LOG="$STATE/sync.log"
 LOCK=/tmp/rupert-mission-sync.lock
 CURL="$RUNTIME/curl"
 CA="$RUNTIME/cacert.pem"
-
-mkdir "$LOCK" 2>/dev/null || exit 0
-trap 'rmdir "$LOCK" 2>/dev/null' EXIT
-mkdir -p "$STATE" "$ARCHIVE"
+WAKE_PID="$STATE/wake-listener.pid"
 
 log() {
     echo "$(date) $*" >> "$LOG"
 }
+
+# Run a background check whenever the user wakes the Kindle. The normal cron
+# entry remains as a fallback while the device is already awake.
+if [ "$1" = "--wake-listener" ]; then
+    echo $$ > "$WAKE_PID"
+    trap 'rm -f "$WAKE_PID"' EXIT
+    /usr/bin/lipc-wait-event -m com.lab126.powerd outOfScreenSaver,resuming | while read EVENT; do
+        case "$EVENT" in
+            outOfScreenSaver*|resuming*)
+                log 'Kindle wake received; starting mission sync'
+                "$0" --scheduled >/dev/null 2>&1 &
+                ;;
+        esac
+    done
+    exit 0
+fi
+
+mkdir -p "$STATE" "$ARCHIVE"
+LISTENER_RUNNING=false
+if [ -f "$WAKE_PID" ]; then
+    PID=$(cat "$WAKE_PID" 2>/dev/null)
+    [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null && LISTENER_RUNNING=true
+fi
+if [ "$LISTENER_RUNNING" != true ]; then
+    rm -f "$WAKE_PID"
+    "$0" --wake-listener >/dev/null 2>&1 &
+fi
+
+mkdir "$LOCK" 2>/dev/null || exit 0
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 if [ ! -x "$CURL" ] || [ ! -f "$CA" ]; then
     log 'secure downloader is missing'
@@ -41,6 +68,12 @@ echo "$WIFI_STATE" | grep -q CONNECTED || {
 # Check the separately signed, allowlisted application update channel.
 [ -x "$RUNTIME/device-update.sh" ] && "$RUNTIME/device-update.sh" >/dev/null 2>&1 || true
 
+# Keep a bounded rolling snapshot while the first launcher is being proven.
+# It makes loader failures visible over USB without requiring SSH or typing.
+tail -1200 /var/log/messages 2>/dev/null > "$STATE/kindlet-live.log"
+grep -i -B 20 -A 40 'kindlet\|rupert\|main class\|runtimeexception\|noclass\|classnotfound\|securityexception\|exception' \
+    /var/log/messages 2>/dev/null | tail -2400 > "$STATE/kindlet-errors.log"
+
 fetch() {
     "$CURL" --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
         --connect-timeout 20 --max-time 90 --cacert "$CA" -o "$1" "$2"
@@ -64,7 +97,8 @@ rm -f "$STAMP"
     exit 0
 }
 
-[ "$(cat "$STATE/last-remote-id" 2>/dev/null)" = "$REMOTE_ID" ] && exit 0
+[ "$(cat "$STATE/last-remote-id" 2>/dev/null)" = "$REMOTE_ID" ] \
+    && [ -f "$DOCUMENT" ] && [ -f "$STATE/launcher.properties" ] && exit 0
 
 if ! fetch "$BOOK" "$BASE_URL/today.mobi" >> "$LOG" 2>&1; then
     log 'mission download failed'
