@@ -29,7 +29,7 @@ Wi-Fi. USB transfer remains a recovery fallback.
 3. `installer/rupert-sync.sh` checks that mission ID every five minutes while
    the Kindle is awake.
 4. When the ID changes, the Kindle performs a certificate-validated TLS 1.2
-   download and atomically replaces `Today's Reading Mission.mobi`.
+   download and atomically replaces `RupertsMission.mobi`.
 
 The Kindle's clock is not trusted for freshness; the published ID is the source
 of truth.
@@ -67,7 +67,7 @@ With the Kindle connected in normal USB storage mode, deliver a prepared MOBI:
 ```
 
 The helper finds the Kindle, writes through a temporary file, verifies SHA-256,
-and then replaces `documents/Today's Reading Mission.mobi`. The Kindle refreshes
+and then replaces `documents/RupertsMission.mobi`. The Kindle refreshes
 its library after it is safely ejected and disconnected.
 
 ## Daily mission log
@@ -84,7 +84,7 @@ its library after it is safely ejected and disconnected.
   `grahamwheaton/rupert-reading-missions` repository.
 - While awake, the Kindle checks the published mission ID every five minutes.
   It downloads only when that ID changes, using certificate-validated HTTPS.
-- The current mission appears as `documents/Today's Reading Mission.mobi`.
+- The current mission appears as `documents/RupertsMission.mobi`.
 - The Kindle clock is not used to decide whether a mission is new.
 - Runtime state and logs are under `/mnt/us/rupert-mission`; the isolated
   downloader, certificate bundle, and sync script are under

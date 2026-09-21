@@ -101,6 +101,44 @@
   marked scheduler entry and sync script; the downloader can be retained for
   recovery or removed separately after confirming nothing else uses it.
 
+## Launcher and KOReader (2026-09-21)
+
+- `RupertsReader.azw2` is KUAL, with `KualKindlet` patched so that on start it
+  runs `/mnt/us/rupert-mission/open-current.sh`. It does not show a menu.
+- Firmware 4.1.4 cannot open a document by path over lipc. The only
+  `com.lab126.framework` commands are `read`, `insertKeystroke`,
+  `dismissDialog` and `clearRffItems`. `read 1` is accepted, but the framework
+  returns to Home.
+- KOReader `kindle-legacy` v2026.07.1 (zip SHA-256
+  `0ED8D5EEC422DAD4894DDC426894C260CCE55EC3EE3C0BE9E8A4FE46C45A5CDE`) was
+  copied by hand to `/mnt/us/koreader` and `/mnt/us/extensions/koreader`.
+  From update v16, `open-current.sh` starts it with the mission file, so one
+  tap from Home opens the book.
+- BusyBox is v1.7.2. It has no `nohup` and no `grep -E`.
+- While KOReader is running, Windows sees the USB storage as an empty drive.
+  Exit KOReader (Menu, last tab, Exit) before connecting the cable.
+
+## SSH over Wi-Fi via KOReader
+
+- KOReader's own Dropbear works where USBNetwork's did not. Start it from
+  Menu, then the network tab, then SSH server (port 2222, key login only, root).
+  It runs only while KOReader is open and the Kindle is awake.
+- `koreader/settings/SSH/authorized_keys` holds `rupert_kindle_rsa.pub`
+  (fingerprint `SHA256:Au/VcFoFMpOjATaE9EuVPctdtJyxaukgbY/Ts0cogDg`).
+
+## Sync fixes (update v17)
+
+- The wake listener's PID file lived on `/mnt/us`, which is unmounted in USB
+  mode. Every cron run during a USB session started another listener; 14 had
+  accumulated. The PID file is now on tmpfs, strays are stopped, and
+  `sync.sh` exits in USB mode.
+- A running `sync.sh` held its own file open. When the updater replaced it,
+  `mntroot ro` failed with `mount: / is busy`, leaving the root filesystem
+  writable. `sync.sh` now runs from a self-deleting `/var/tmp` copy.
+- Wi-Fi is switched back off after a check if it was off beforehand.
+  `sync.log` is trimmed at 64 KiB, the archive keeps 14 missions, and Kindlet
+  log snapshots run only when `/mnt/us/rupert-mission/debug` exists.
+
 ## Jailbreak preparation
 
 - Selected package: MobileRead/NiLuJe `kindle-k4-jailbreak-1.8.N.zip`.

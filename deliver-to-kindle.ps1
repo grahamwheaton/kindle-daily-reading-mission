@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$MissionPath,
 
-    [string]$DeviceFileName = "Today's Reading Mission.mobi"
+    [string]$DeviceFileName = "RupertsMission.mobi"
 )
 
 $ErrorActionPreference = 'Stop'
