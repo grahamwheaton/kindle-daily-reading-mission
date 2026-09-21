@@ -1,5 +1,7 @@
 #!/bin/sh
 
-# Let appmgrd resolve the installed document's registered reader handler.
-exec /usr/bin/lipc-set-prop com.lab126.appmgrd start \
-    file:///mnt/us/documents/RupertsMission.mobi
+# Firmware 4.1.4 has no appmgrd. Its framework exposes a native `read`
+# command, which opens LAST_BOOK_READ from the reader preferences. The daily
+# mission uses a stable filename and is therefore always that book after the
+# first successful manual read.
+exec /usr/bin/lipc-set-prop -i com.lab126.framework read 1
