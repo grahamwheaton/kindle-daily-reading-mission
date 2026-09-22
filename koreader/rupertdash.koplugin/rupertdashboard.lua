@@ -377,8 +377,11 @@ function Dashboard:buildMissionBody(width, height)
 
     local cover_file = COVER_FILE
     if lfs.attributes(cover_file, "mode") ~= "file" then
+        -- Size in the key: a corrected mission keeps its ID but changes the
+        -- book, and a stale cached cover would outlive it.
+        local size = lfs.attributes(MISSION_FILE, "size") or 0
         local ok, found = pcall(extractMobiImage, MISSION_FILE,
-            "/var/tmp/rupert-cover-" .. (p.id or "current"):gsub("[^%w-]", "_"))
+            "/var/tmp/rupert-cover-" .. (p.id or "current"):gsub("[^%w-]", "_") .. "-" .. size)
         cover_file = ok and found or nil
         if not ok then logger.warn("rupertdash: cover extraction failed", found) end
     end

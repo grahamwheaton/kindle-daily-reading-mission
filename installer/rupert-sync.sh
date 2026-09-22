@@ -151,9 +151,10 @@ fetch() {
 }
 
 STAMP="$STATE/date.part"
+DIGEST_PART="$STATE/digest.part"
 BOOK="$STATE/today.mobi.part"
 META="$STATE/launcher.properties.part"
-rm -f "$STAMP" "$BOOK" "$META"
+rm -f "$STAMP" "$DIGEST_PART" "$BOOK" "$META"
 
 if ! fetch "$STAMP" "$BASE_URL/date.txt" >> "$LOG" 2>&1; then
     log 'mission ID download failed'
@@ -168,8 +169,18 @@ rm -f "$STAMP"
     exit 0
 }
 
-[ "$(cat "$STATE/last-remote-id" 2>/dev/null)" = "$REMOTE_ID" ] \
-    && [ -f "$DOCUMENT" ] && [ -f "$STATE/launcher.properties" ] && exit 0
+# The ID alone would miss a corrected story: fixing a mission republishes it
+# under the same date. The published digest changes whenever the book does.
+if fetch "$DIGEST_PART" "$BASE_URL/today.sha256" >> "$LOG" 2>&1; then
+    REMOTE_DIGEST=$(tr -d '\r\n ' < "$DIGEST_PART")
+fi
+rm -f "$DIGEST_PART"
+
+if [ "$(cat "$STATE/last-remote-id" 2>/dev/null)" = "$REMOTE_ID" ] \
+    && [ "$(cat "$STATE/last-remote-digest" 2>/dev/null)" = "$REMOTE_DIGEST" ] \
+    && [ -f "$DOCUMENT" ] && [ -f "$STATE/launcher.properties" ]; then
+    exit 0
+fi
 
 if ! fetch "$BOOK" "$BASE_URL/today.mobi" >> "$LOG" 2>&1; then
     log 'mission download failed'
@@ -190,6 +201,18 @@ if [ "$SIZE" -lt 1024 ]; then
     exit 0
 fi
 
+# GitHub can briefly serve a new digest beside the old book (or the reverse).
+# A mismatch means we caught it mid-publish: leave everything alone and let the
+# next run pick it up.
+if [ -n "$REMOTE_DIGEST" ]; then
+    LOCAL_DIGEST=$(/usr/bin/openssl dgst -sha256 "$BOOK" 2>/dev/null | awk '{print $NF}')
+    if [ "$LOCAL_DIGEST" != "$REMOTE_DIGEST" ]; then
+        log 'mission rejected: digest did not match the published one'
+        rm -f "$BOOK" "$META"
+        exit 0
+    fi
+fi
+
 OLD_ID=$(cat "$STATE/last-remote-id" 2>/dev/null)
 if [ -n "$OLD_ID" ] && [ -f "$DOCUMENT" ]; then
     cp "$DOCUMENT" "$ARCHIVE/$OLD_ID.mobi"
@@ -197,8 +220,13 @@ if [ -n "$OLD_ID" ] && [ -f "$DOCUMENT" ]; then
 fi
 
 mv -f "$BOOK" "$DOCUMENT"
+
+# The mission keeps one filename, so the reader would carry the previous
+# story's position, font and margins into today's. Start each one clean.
+rm -rf "${DOCUMENT%.mobi}.sdr"
 mv -f "$META" "$STATE/launcher.properties"
 echo "$REMOTE_ID" > "$STATE/last-remote-id"
+echo "$REMOTE_DIGEST" > "$STATE/last-remote-digest"
 log "installed mission $REMOTE_ID ($SIZE bytes)"
 
 # Keep the newest $ARCHIVE_KEEP missions; IDs are dates, so name order is age.
