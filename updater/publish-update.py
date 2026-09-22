@@ -36,7 +36,7 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def collect(staging):
+def collect(staging, content):
     """Lay the update out the way the device expects to find it."""
     plan = {
         "runtime/sync.sh": PROJECT / "installer/rupert-sync.sh",
@@ -45,7 +45,11 @@ def collect(staging):
         "state/open-current.sh": PROJECT / "launcher/open-current.sh",
         "state/sleep.png": PROJECT / "assets/sleep-screen.png",
     }
+    # The launcher app is a build output, so it is not in the repository: fall
+    # back to the copy already published, which is what the Kindle is running.
     launcher = PROJECT / "launcher/out/RupertsReader.azw2"
+    if not launcher.is_file():
+        launcher = content / "published/device/RupertsReader.azw2"
     if launcher.is_file():
         plan["documents/RupertsReader.azw2"] = launcher
 
@@ -109,7 +113,7 @@ def main():
     with tempfile.TemporaryDirectory() as workspace:
         staging = pathlib.Path(workspace) / "bundle"
         staging.mkdir()
-        plan = collect(staging)
+        plan = collect(staging, pathlib.Path(args.content))
         bundle = device / "bundle.tar"
         build_tar(staging, bundle)
 
