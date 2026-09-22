@@ -202,7 +202,13 @@ end
 
 function Dashboard:onShow()
     self:focusMissionCard()
-    logger.dbg("rupertdash: dashboard shown, focus on the mission card")
+    -- And again once everything else showing this screen has had its turn:
+    -- something claims the first tile during show, and the ring has to be on
+    -- the mission card, which is what the centre button should start.
+    UIManager:nextTick(function()
+        self:focusMissionCard()
+        UIManager:setDirty(self, "fast")
+    end)
     return false
 end
 
