@@ -20,6 +20,12 @@ State.PROPERTIES_FILE = State.STATE_DIR .. "/launcher.properties"
 State.COVER_FILE = State.STATE_DIR .. "/cover.png"
 State.ARCHIVE_DIR = State.STATE_DIR .. "/archive"
 State.COMPLETED_DIR = State.STATE_DIR .. "/completed"
+-- The weekly Big Read: the sync unpacks it here, and finishing one is recorded
+-- separately from the daily streak.
+State.BIGREAD_DIR = State.STATE_DIR .. "/bigread"
+State.BIGREAD_ID_FILE = State.STATE_DIR .. "/bigread-id"
+State.BIGREAD_PROGRESS = State.STATE_DIR .. "/bigread-progress"
+State.BIGREAD_COMPLETED_DIR = State.STATE_DIR .. "/completed-bigread"
 
 function State.readProperties(path)
     local props = {}
@@ -149,6 +155,55 @@ function State.completedCount()
         if name:match("%.json$") then count = count + 1 end
     end
     return count
+end
+
+local function trimmed(path)
+    local f = io.open(path, "r")
+    if not f then return nil end
+    local line = f:read("*l")
+    f:close()
+    return line and line:gsub("%s", "") or nil
+end
+
+function State.bigReadId()
+    return trimmed(State.BIGREAD_ID_FILE)
+end
+
+--- Where he is in this week's story, or nil to start at the beginning.
+function State.bigReadProgress(id)
+    local props = State.readProperties(State.BIGREAD_PROGRESS)
+    if props.id ~= id then return nil end
+    return props.node
+end
+
+function State.saveBigReadProgress(id, node_id)
+    if not id or not node_id then return end
+    local f = io.open(State.BIGREAD_PROGRESS, "w")
+    if not f then return end
+    f:write(string.format("id=%s\nnode=%s\nsaved_at=%s\n",
+        id, node_id, os.date("!%Y-%m-%dT%H:%M:%SZ")))
+    f:close()
+end
+
+function State.bigReadFinished(id)
+    return id ~= nil
+        and lfs.attributes(State.BIGREAD_COMPLETED_DIR .. "/" .. id .. ".json", "mode") == "file"
+end
+
+--- Record a finished Big Read, with the ending he reached. Kept apart from the
+--- daily completions so the streak stays a count of daily missions.
+function State.recordBigRead(id, title, ending)
+    if not id then return false end
+    lfs.mkdir(State.BIGREAD_COMPLETED_DIR)
+    local path = State.BIGREAD_COMPLETED_DIR .. "/" .. id .. ".json"
+    local f = io.open(path .. ".part", "w")
+    if not f then return false end
+    local function clean(value) return (value or ""):gsub('"', "'") end
+    f:write(string.format('{"bigread":"%s","title":"%s","ending":"%s","finished_at":"%s"}\n',
+        id, clean(title), clean(ending), os.date("!%Y-%m-%dT%H:%M:%SZ")))
+    f:close()
+    os.remove(path)
+    return os.rename(path .. ".part", path) and true or false
 end
 
 return State

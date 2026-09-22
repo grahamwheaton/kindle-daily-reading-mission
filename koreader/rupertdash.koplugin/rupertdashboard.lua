@@ -53,6 +53,7 @@ local ICON = {
     fire = "\u{E937}",
     book = "\u{E7BD}",
     compass = "\u{E88A}",
+    bigread = "\u{E7BA}",
     chart = "\u{E827}",
     trophy = "\u{EC37}",
     cog = "\u{F013}",
@@ -421,6 +422,7 @@ function Dashboard:buildRightColumn(width, height)
     local streak_wrap = FrameContainer:new{ bordersize = 0, padding = 5, streak_box }
 
     local entries = {
+        { ICON.bigread, self:bigReadLabel(), function() self:openBigRead() end },
         { ICON.book, "PREVIOUS MISSIONS", function() self:showPrevious() end },
         { ICON.compass, "FACT FILES", function() self:comingSoon("Fact Files") end },
         { ICON.chart, "MY PROGRESS", function() self:showProgress() end },
@@ -502,6 +504,27 @@ function Dashboard:startMission()
         return
     end
     self:openBook(MISSION_FILE)
+end
+
+--- The tile says where he is in this week's story.
+function Dashboard:bigReadLabel()
+    local id = State.bigReadId()
+    if not id then return "BIG READ" end
+    if State.bigReadFinished(id) then return "BIG READ  \u{E82B}" end
+    return State.bigReadProgress(id) and "BIG READ - CARRY ON" or "BIG READ - NEW"
+end
+
+function Dashboard:openBigRead()
+    local BigRead = require("rupertbigread")
+    local story, problem = BigRead.load()
+    if not story then
+        UIManager:show(InfoMessage:new{ text = problem })
+        return
+    end
+    UIManager:show(BigRead:new{
+        story = story,
+        node_id = State.bigReadProgress(story.id),
+    }, "full")
 end
 
 function Dashboard:showPrevious()
