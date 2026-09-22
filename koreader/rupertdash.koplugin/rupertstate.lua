@@ -10,6 +10,7 @@ history. The uploader marks what it has sent with a matching .sent file.
 --]]
 
 local lfs = require("libs/libkoreader-lfs")
+local logger = require("logger")
 
 local State = {
     STATE_DIR = "/mnt/us/rupert-mission",
@@ -41,6 +42,63 @@ function State.missionIdForFile(file)
         return State.readProperties(State.PROPERTIES_FILE).id
     end
     return nil
+end
+
+-- Calibre's MOBI output does not always carry a cover record (EXTH 201), so
+-- take the first image record from the Palm database instead. Cached in tmpfs.
+local function extractMobiImage(path, cache_base)
+    for _, ext in ipairs({ "jpg", "png", "gif" }) do
+        if lfs.attributes(cache_base .. "." .. ext, "mode") == "file" then
+            return cache_base .. "." .. ext
+        end
+    end
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local data = f:read("*a")
+    f:close()
+    local function u16(o) local a, b = data:byte(o + 1, o + 2) return a * 256 + b end
+    local function u32(o) local a, b, c, d = data:byte(o + 1, o + 4) return ((a * 256 + b) * 256 + c) * 256 + d end
+    if #data < 78 or data:sub(61, 68) ~= "BOOKMOBI" then return nil end
+    local count = u16(76)
+    local offsets = {}
+    for i = 0, count - 1 do offsets[i] = u32(78 + 8 * i) end
+    offsets[count] = #data
+    local first = u32(offsets[0] + 16 + 92)
+    if first >= count then return nil end
+    for i = first, count - 1 do
+        local magic = data:sub(offsets[i] + 1, offsets[i] + 4)
+        local ext = (magic:sub(1, 3) == "\255\216\255" and "jpg")
+            or (magic == "\137PNG" and "png")
+            or (magic:sub(1, 3) == "GIF" and "gif")
+        if ext then
+            local out = cache_base .. "." .. ext
+            local w = io.open(out, "wb")
+            if not w then return nil end
+            w:write(data:sub(offsets[i] + 1, offsets[i + 1]))
+            w:close()
+            return out
+        end
+    end
+    return nil
+end
+
+--- A cover for a mission book: the published cover.png for today's mission,
+--- otherwise the picture inside the book. Nil when it has none.
+-- Cached by size as well as ID, because a corrected mission keeps its ID but
+-- changes the book.
+function State.coverFor(file, id)
+    if file == State.MISSION_FILE and lfs.attributes(State.COVER_FILE, "mode") == "file" then
+        return State.COVER_FILE
+    end
+    local size = lfs.attributes(file, "size")
+    if not size then return nil end
+    local key = "/var/tmp/rupert-cover-" .. tostring(id or "current"):gsub("[^%w-]", "_") .. "-" .. size
+    local ok, found = pcall(extractMobiImage, file, key)
+    if not ok then
+        logger.warn("rupertdash: cover extraction failed", found)
+        return nil
+    end
+    return found
 end
 
 function State.isCompleted(id)

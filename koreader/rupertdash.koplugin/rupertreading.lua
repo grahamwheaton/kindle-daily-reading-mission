@@ -14,7 +14,7 @@ deliberately from KOReader's own menus. Bump PROFILE_VERSION to re-apply.
 
 local logger = require("logger")
 
-local PROFILE_VERSION = 1
+local PROFILE_VERSION = 2
 
 local Reading = {}
 
@@ -26,12 +26,19 @@ local SETTINGS = {
     copt_b_page_margin = 15,
     copt_line_spacing = 120,
     hyphenation = false,
+    -- Reaching the last page pops up a dialog full of choices he does not
+    -- need. Let him press Home instead.
+    end_document_action = "nothing",
 }
 
--- Ragged right, and ignore whatever margins the HTML asked for.
+-- Ragged right; ignore whatever margins the HTML asked for; and no first-line
+-- indent, which is what makes the left edge look wobbly. Without the indent,
+-- paragraphs need a little air between them to stay separate.
 local STYLE_TWEAKS = {
     text_align_most_left = true,
     margin_body_0 = true,
+    paragraph_no_indent = true,
+    paragraph_whitespace_half = true,
 }
 
 function Reading.apply()

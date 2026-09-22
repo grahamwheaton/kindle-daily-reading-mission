@@ -26,10 +26,10 @@ local InfoMessage = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LeftContainer = require("ui/widget/container/leftcontainer")
 local LineWidget = require("ui/widget/linewidget")
-local Menu = require("ui/widget/menu")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local RightContainer = require("ui/widget/container/rightcontainer")
 local State = require("rupertstate")
+local Tile = require("ruperttile")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
@@ -75,12 +75,14 @@ end
 
 local readProperties = State.readProperties
 
-local function archivedMissions()
+-- Today's mission is on the dashboard already, and the archived copy of it is
+-- the version it replaced, so leave it out of previous missions.
+local function archivedMissions(current_id)
     local missions = {}
     if lfs.attributes(ARCHIVE_DIR, "mode") ~= "directory" then return missions end
     for name in lfs.dir(ARCHIVE_DIR) do
         local id = name:match("^(.+)%.mobi$")
-        if id then
+        if id and id ~= current_id then
             local props = readProperties(ARCHIVE_DIR .. "/" .. id .. ".properties")
             table.insert(missions, { id = id, title = props.title or id, file = ARCHIVE_DIR .. "/" .. name })
         end
@@ -89,43 +91,6 @@ local function archivedMissions()
     return missions
 end
 
--- Calibre's MOBI output does not always carry a cover record (EXTH 201), so
--- take the first image record from the Palm database instead. Cached in tmpfs.
-local function extractMobiImage(path, cache_base)
-    for _, ext in ipairs({ "jpg", "png", "gif" }) do
-        if lfs.attributes(cache_base .. "." .. ext, "mode") == "file" then
-            return cache_base .. "." .. ext
-        end
-    end
-    local f = io.open(path, "rb")
-    if not f then return nil end
-    local data = f:read("*a")
-    f:close()
-    local function u16(o) local a, b = data:byte(o + 1, o + 2) return a * 256 + b end
-    local function u32(o) local a, b, c, d = data:byte(o + 1, o + 4) return ((a * 256 + b) * 256 + c) * 256 + d end
-    if #data < 78 or data:sub(61, 68) ~= "BOOKMOBI" then return nil end
-    local count = u16(76)
-    local offsets = {}
-    for i = 0, count - 1 do offsets[i] = u32(78 + 8 * i) end
-    offsets[count] = #data
-    local first = u32(offsets[0] + 16 + 92)
-    if first >= count then return nil end
-    for i = first, count - 1 do
-        local magic = data:sub(offsets[i] + 1, offsets[i] + 4)
-        local ext = (magic:sub(1, 3) == "\255\216\255" and "jpg")
-            or (magic == "\137PNG" and "png")
-            or (magic:sub(1, 3) == "GIF" and "gif")
-        if ext then
-            local out = cache_base .. "." .. ext
-            local w = io.open(out, "wb")
-            if not w then return nil end
-            w:write(data:sub(offsets[i] + 1, offsets[i + 1]))
-            w:close()
-            return out
-        end
-    end
-    return nil
-end
 
 local function batteryIcon()
     local ok, powerd = pcall(function() return Device:getPowerDevice() end)
@@ -142,62 +107,36 @@ local function wifiIcon()
     return (ok and on == false) and ICON.wifi_off or ICON.wifi
 end
 
---[[ A focusable, pressable block. Focus draws a black ring around it; the
-     block keeps its own colours so the design reads the same either way. ]]
-local Tile = InputContainer:extend{
-    content = nil,
-    callback = nil,
-}
-
-function Tile:init()
-    self.ring = FrameContainer:new{
-        bordersize = 3,
-        color = WHITE,
-        padding = 2,
-        margin = 0,
-        radius = 14,
-        self.content,
-    }
-    self[1] = self.ring
-    self.dimen = Geom:new{ x = 0, y = 0, w = self.ring:getSize().w, h = self.ring:getSize().h }
-    self.ges_events = {
-        TapSelect = { GestureRange:new{ ges = "tap", range = function() return self.dimen end } },
-    }
-end
-
-function Tile:onFocus()
-    self.ring.color = BLACK
-    return true
-end
-
-function Tile:onUnfocus()
-    self.ring.color = WHITE
-    return true
-end
-
-function Tile:onTapSelect()
-    if self.callback then
-        UIManager:nextTick(self.callback)
-    end
-    return true
-end
 
 local Dashboard = FocusManager:extend{
     file_manager = nil,
     covers_fullscreen = true,
 }
 
+--- Show the dashboard unless it is already up.
+-- Closing a book does not always build a new file manager -- KOReader reuses
+-- the existing one, and then the plugin is not re-created -- so the reader
+-- asks for the dashboard itself on the way out.
+function Dashboard.showIfNeeded(file_manager)
+    if Dashboard.instance then return end
+    UIManager:show(Dashboard:new{ file_manager = file_manager }, "full")
+end
+
 function Dashboard:init()
+    Dashboard.instance = self
     self.dimen = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() }
     self.props = readProperties(State.PROPERTIES_FILE)
     self.finished_today = State.isCompleted(self.props.id)
-    self.archive = archivedMissions()
+    self.archive = archivedMissions(self.props.id)
 
     self.key_events.ExitToKindle = { { "Home" } }
     self.key_events.ShowSettings = { { "Menu" } }
     self.key_events.IgnoreBack = { { "Back" } }
-    self.key_events.PageDown = { { { "RPgFwd", "LPgFwd" } }, event = "FocusMove", args = { 0, 1 } }
-    self.key_events.PageUp = { { { "RPgBack", "LPgBack" } }, event = "FocusMove", args = { 0, -1 } }
+    -- The side page-turn buttons walk the tiles, one binding per key.
+    self.key_events.PageDownRight = { { "RPgFwd" }, event = "FocusMove", args = { 0, 1 } }
+    self.key_events.PageDownLeft = { { "LPgFwd" }, event = "FocusMove", args = { 0, 1 } }
+    self.key_events.PageUpRight = { { "RPgBack" }, event = "FocusMove", args = { 0, -1 } }
+    self.key_events.PageUpLeft = { { "LPgBack" }, event = "FocusMove", args = { 0, -1 } }
 
     local W, H = self.dimen.w, self.dimen.h
     local M = 10
@@ -244,7 +183,26 @@ function Dashboard:init()
             },
         },
     }
+    self:focusMissionCard()
+end
+
+--- Put the ring on the mission card and nowhere else.
+-- Belt and braces: the card is the first thing he should be able to press, and
+-- the ring drifted to the first tile once, so the visible state is asserted
+-- rather than assumed.
+function Dashboard:focusMissionCard()
+    for _, tile in ipairs(self.tiles) do
+        tile:onUnfocus()
+    end
+    self.selected = { x = 1, y = 1 }
+    self.last_tile_row = 1
     self.start_tile:onFocus()
+end
+
+function Dashboard:onShow()
+    self:focusMissionCard()
+    logger.dbg("rupertdash: dashboard shown, focus on the mission card")
+    return false
 end
 
 function Dashboard:buildStatusBar(width)
@@ -375,16 +333,7 @@ function Dashboard:buildMissionBody(width, height)
     local gap = 12
     local side_w = width - image_w - gap
 
-    local cover_file = COVER_FILE
-    if lfs.attributes(cover_file, "mode") ~= "file" then
-        -- Size in the key: a corrected mission keeps its ID but changes the
-        -- book, and a stale cached cover would outlive it.
-        local size = lfs.attributes(MISSION_FILE, "size") or 0
-        local ok, found = pcall(extractMobiImage, MISSION_FILE,
-            "/var/tmp/rupert-cover-" .. (p.id or "current"):gsub("[^%w-]", "_") .. "-" .. size)
-        cover_file = ok and found or nil
-        if not ok then logger.warn("rupertdash: cover extraction failed", found) end
-    end
+    local cover_file = State.coverFor(MISSION_FILE, p.id)
     local cover
     if cover_file then
         -- Scale to fit ourselves: with scale_factor = 0 the widget takes the
@@ -556,30 +505,15 @@ function Dashboard:startMission()
 end
 
 function Dashboard:showPrevious()
-    local items = {}
-    for _, m in ipairs(self.archive) do
-        table.insert(items, {
-            text = m.title,
-            mandatory = m.id,
-            callback = function() self:openBook(m.file) end,
-        })
-    end
-    if #items == 0 then
+    if #self.archive == 0 then
         UIManager:show(InfoMessage:new{ text = "Your finished missions will appear here." })
         return
     end
-    local menu
-    menu = Menu:new{
-        title = "Previous missions",
-        item_table = items,
-        width = Screen:getWidth(),
-        height = Screen:getHeight(),
-        is_borderless = true,
-        is_popout = false,
-        covers_fullscreen = true,
-        close_callback = function() UIManager:close(menu) end,
-    }
-    UIManager:show(menu)
+    local Archive = require("rupertarchive")
+    UIManager:show(Archive:new{
+        missions = self.archive,
+        on_open = function(file) self:openBook(file) end,
+    }, "full")
 end
 
 function Dashboard:showProgress()
@@ -637,6 +571,9 @@ function Dashboard:onIgnoreBack()
 end
 
 function Dashboard:onCloseWidget()
+    if Dashboard.instance == self then
+        Dashboard.instance = nil
+    end
     UIManager:setDirty(nil, "full")
 end
 

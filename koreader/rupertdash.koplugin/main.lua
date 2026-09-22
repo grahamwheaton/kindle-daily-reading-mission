@@ -39,7 +39,21 @@ function RupertDash:init()
     if os.getenv("RUPERT_DASHBOARD") ~= "1" then return end
     Reading.apply()
     UIManager:nextTick(function()
-        UIManager:show(Dashboard:new{ file_manager = self.ui }, "full")
+        Dashboard.showIfNeeded(self.ui)
+    end)
+end
+
+--- Back to the dashboard when a mission is put down, rather than to
+--- KOReader's file browser. The file manager may be reused rather than
+--- rebuilt, in which case the plugin is not re-created and nothing else would
+--- bring the dashboard back.
+function RupertDash:onCloseWidget()
+    if not self.ui.document or os.getenv("RUPERT_DASHBOARD") ~= "1" then return end
+    UIManager:scheduleIn(0.5, function()
+        local FileManager = require("apps/filemanager/filemanager")
+        if FileManager.instance then
+            Dashboard.showIfNeeded(FileManager.instance)
+        end
     end)
 end
 
