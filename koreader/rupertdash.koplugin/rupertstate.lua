@@ -192,15 +192,19 @@ end
 
 --- Record a finished Big Read, with the ending he reached. Kept apart from the
 --- daily completions so the streak stays a count of daily missions.
-function State.recordBigRead(id, title, ending)
+function State.recordBigRead(id, title, ending, pages, seconds)
     if not id then return false end
     lfs.mkdir(State.BIGREAD_COMPLETED_DIR)
     local path = State.BIGREAD_COMPLETED_DIR .. "/" .. id .. ".json"
     local f = io.open(path .. ".part", "w")
     if not f then return false end
     local function clean(value) return (value or ""):gsub('"', "'") end
-    f:write(string.format('{"bigread":"%s","title":"%s","ending":"%s","finished_at":"%s"}\n',
-        id, clean(title), clean(ending), os.date("!%Y-%m-%dT%H:%M:%SZ")))
+    -- pages and seconds travel with it: how he got to the ending is the
+    -- interesting part when we look back at a week of these.
+    f:write(string.format(
+        '{"bigread":"%s","title":"%s","ending":"%s","pages":%d,"seconds":%d,"finished_at":"%s"}\n',
+        id, clean(title), clean(ending), pages or 0, seconds or 0,
+        os.date("!%Y-%m-%dT%H:%M:%SZ")))
     f:close()
     os.remove(path)
     return os.rename(path .. ".part", path) and true or false
