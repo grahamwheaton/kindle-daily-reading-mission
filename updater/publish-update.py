@@ -121,8 +121,14 @@ def main():
         for name, source in (("RupertsReader.azw2", plan.get("documents/RupertsReader.azw2")),
                              ("rupert-sync.sh", PROJECT / "installer/rupert-sync.sh"),
                              ("open-current.sh", PROJECT / "launcher/open-current.sh")):
-            if source and source.is_file():
-                shutil.copyfile(source, device / name)
+            destination = device / name
+            if not source or not source.is_file():
+                continue
+            # The launcher may already be the published copy, and copying a
+            # file onto itself is an error rather than a no-op.
+            if destination.exists() and source.samefile(destination):
+                continue
+            shutil.copyfile(source, destination)
 
         manifest = device / "manifest.txt"
         lines = [f"version={args.version}", f"bundle_sha256={digest(bundle)}"]
