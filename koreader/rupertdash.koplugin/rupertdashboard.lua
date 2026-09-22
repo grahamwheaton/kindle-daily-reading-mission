@@ -29,6 +29,7 @@ local LineWidget = require("ui/widget/linewidget")
 local Menu = require("ui/widget/menu")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local RightContainer = require("ui/widget/container/rightcontainer")
+local State = require("rupertstate")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
@@ -38,11 +39,9 @@ local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local Screen = Device.screen
 
-local STATE_DIR = "/mnt/us/rupert-mission"
-local MISSION_FILE = "/mnt/us/documents/RupertsMission.mobi"
-local PROPERTIES_FILE = STATE_DIR .. "/launcher.properties"
-local COVER_FILE = STATE_DIR .. "/cover.png"
-local ARCHIVE_DIR = STATE_DIR .. "/archive"
+local MISSION_FILE = State.MISSION_FILE
+local COVER_FILE = State.COVER_FILE
+local ARCHIVE_DIR = State.ARCHIVE_DIR
 
 local BLACK = Blitbuffer.COLOR_BLACK
 local WHITE = Blitbuffer.COLOR_WHITE
@@ -74,17 +73,7 @@ local function text(str, face, color, max_width)
     return TextWidget:new{ text = str, face = face, fgcolor = color or BLACK, max_width = max_width }
 end
 
-local function readProperties(path)
-    local props = {}
-    local f = io.open(path, "r")
-    if not f then return props end
-    for line in f:lines() do
-        local key, value = line:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
-        if key then props[key] = value end
-    end
-    f:close()
-    return props
-end
+local readProperties = State.readProperties
 
 local function archivedMissions()
     local missions = {}
@@ -200,7 +189,8 @@ local Dashboard = FocusManager:extend{
 
 function Dashboard:init()
     self.dimen = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() }
-    self.props = readProperties(PROPERTIES_FILE)
+    self.props = readProperties(State.PROPERTIES_FILE)
+    self.finished_today = State.isCompleted(self.props.id)
     self.archive = archivedMissions()
 
     self.key_events.ExitToKindle = { { "Home" } }
@@ -342,7 +332,7 @@ function Dashboard:buildMissionCard(width, height)
             dimen = Geom:new{ w = cw, h = button_h },
             HorizontalGroup:new{
                 align = "center",
-                text("START MISSION", bold(32), WHITE),
+                text(self.finished_today and "READ AGAIN" or "START MISSION", bold(32), WHITE),
                 HorizontalSpan:new{ width = 14 },
                 text(ICON.play, symbols(30), WHITE),
             },
@@ -447,7 +437,12 @@ function Dashboard:buildMissionBody(width, height)
 end
 
 function Dashboard:buildRightColumn(width, height)
-    local streak = tonumber(self.props.streak) or 0
+    -- What was actually read. The published number is only a fallback until
+    -- the device has any history of its own.
+    local streak = State.streak(self.props.id)
+    if State.completedCount() == 0 then
+        streak = tonumber(self.props.streak) or 0
+    end
     local streak_h = 136
     local streak_box = FrameContainer:new{
         width = width - 10,
@@ -585,10 +580,12 @@ function Dashboard:showPrevious()
 end
 
 function Dashboard:showProgress()
-    local streak = tonumber(self.props.streak) or 0
+    local streak = State.streak(self.props.id)
+    local finished = State.completedCount()
     UIManager:show(InfoMessage:new{
-        text = string.format("Missions completed: %d\nCurrent streak: %d day%s",
-            #self.archive + 1, streak, streak == 1 and "" or "s"),
+        text = string.format("Missions finished: %d\nStreak: %d day%s\nToday's mission: %s",
+            finished, streak, streak == 1 and "" or "s",
+            self.finished_today and "finished" or "not finished yet"),
     })
 end
 
