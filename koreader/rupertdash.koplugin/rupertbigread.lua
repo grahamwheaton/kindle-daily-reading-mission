@@ -181,18 +181,29 @@ function BigRead:build()
     local body_h = H - 2 * margin - header:getSize().h - bottom:getSize().h - 16
 
     local body = VerticalGroup:new{ align = "left" }
+    local picture_h = 0
     if node.image then
         local path = State.BIGREAD_DIR .. "/" .. node.image
-        if lfs.attributes(path, "mode") == "file" then
+        -- A picture that will not decode must cost him the picture, not the
+        -- story: one arrived truncated from the writer before the build
+        -- learned to check.
+        local ok, picture, height = pcall(function()
             local native = ImageWidget:new{ file = path, file_do_cache = false, scale_factor = 1 }
             local size = native:getSize()
             native:free()
             local scale = math.min(inner_w / size.w, (body_h * 0.45) / size.h)
+            return ImageWidget:new{ file = path, file_do_cache = false, scale_factor = scale },
+                math.floor(size.h * scale)
+        end)
+        if ok and picture then
+            picture_h = height + 12
             table.insert(body, CenterContainer:new{
-                dimen = Geom:new{ w = inner_w, h = math.floor(size.h * scale) },
-                ImageWidget:new{ file = path, file_do_cache = false, scale_factor = scale },
+                dimen = Geom:new{ w = inner_w, h = height },
+                picture,
             })
             table.insert(body, VerticalSpan:new{ width = 12 })
+        elseif lfs.attributes(path, "mode") == "file" then
+            logger.warn("rupertdash: Big Read picture would not open", node.image, picture)
         end
     end
     table.insert(body, TextBoxWidget:new{
@@ -200,7 +211,7 @@ function BigRead:build()
         face = regular(26),
         width = inner_w,
         line_height = 0.3,
-        height = body_h - (node.image and math.floor(body_h * 0.45) + 12 or 0),
+        height = body_h - picture_h,
         height_adjust = true,
         height_overflow_show_ellipsis = true,
     })
