@@ -219,7 +219,7 @@ function Dashboard:buildStatusBar(width)
         align = "center",
         text(wifiIcon(), symbols(22)),
         HorizontalSpan:new{ width = 14 },
-        text("RUPERT  v27", bold(17)),
+                text("RUPERT  v28", bold(17)),
     }
     local right = HorizontalGroup:new{
         align = "center",
@@ -411,18 +411,20 @@ function Dashboard:buildRightColumn(width, height)
         radius = 12,
         padding = 4,
         CenterContainer:new{
-            dimen = Geom:new{ w = width - 22, h = streak_h - 22 },
+            dimen = Geom:new{ w = width - 22, h = streak_h - 32 },
             VerticalGroup:new{
                 align = "center",
-                text("STREAK", bold(16)),
+                text("STREAK", bold(14)),
+                VerticalSpan:new{ width = 4 },
                 HorizontalGroup:new{
                     align = "center",
-                    text(ICON.fire, symbols(40)),
-                    HorizontalSpan:new{ width = 8 },
-                    text(tostring(streak), bold(44)),
+                    text(ICON.fire, symbols(32)),
+                    HorizontalSpan:new{ width = 6 },
+                    text(tostring(streak), bold(36)),
                 },
-                text(streak == 1 and "DAY" or "DAYS", bold(16)),
-                text("POINTS: " .. State.availablePoints(), bold(16)),
+                text(streak == 1 and "DAY" or "DAYS", bold(13)),
+                VerticalSpan:new{ width = 4 },
+                text(State.availablePoints() .. " POINTS", bold(14)),
             },
         },
     }
@@ -559,45 +561,8 @@ function Dashboard:showProgress()
 end
 
 function Dashboard:showUnlocks()
-    local dialog
-    local buttons = {}
-    for _, item in ipairs(State.UNLOCKS) do
-        local reward = item
-        local label = reward.title .. "\n" .. reward.cost .. " points / GBP " .. reward.pounds
-        if State.unlockPurchased(reward.id) then
-            label = reward.title .. "\nREQUESTED - " .. reward.cost .. " points"
-        end
-        table.insert(buttons, { { text = label, callback = function()
-            UIManager:close(dialog)
-            if State.unlockPurchased(reward.id) then
-                UIManager:show(InfoMessage:new{ text = "Already requested. Ask your parent about the purchase." })
-                return
-            end
-            if State.availablePoints() < reward.cost then
-                UIManager:show(InfoMessage:new{ text = string.format("You need %d more points to unlock this.", reward.cost - State.availablePoints()) })
-                return
-            end
-            UIManager:show(ConfirmBox:new{
-                text = string.format("Spend %d points on %s? This sends a purchase request to your parent. It does not buy the DLC automatically.", reward.cost, reward.title),
-                ok_text = "Spend points",
-                ok_callback = function()
-                    local ok, err = State.purchaseUnlock(reward.id)
-                    if ok then
-                        self:refresh()
-                        UIManager:show(InfoMessage:new{ text = "Unlock requested! Ask your parent to buy the DLC. Your request will be backed up when the Kindle syncs." })
-                    else
-                        UIManager:show(InfoMessage:new{ text = err })
-                    end
-                end,
-            })
-        end } })
-    end
-    table.insert(buttons, { { text = "Back", callback = function() UIManager:close(dialog) end } })
-    dialog = ButtonDialog:new{
-        title = string.format("UNLOCK STORE  |  %d points\n5 points = GBP 1", State.availablePoints()),
-        buttons = buttons,
-    }
-    UIManager:show(dialog)
+    local Store = require("rupertstore")
+    UIManager:show(Store:new{}, "full")
 end
 
 function Dashboard:comingSoon(name)
