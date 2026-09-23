@@ -422,7 +422,7 @@ function Dashboard:buildRightColumn(width, height)
                     text(tostring(streak), bold(44)),
                 },
                 text(streak == 1 and "DAY" or "DAYS", bold(16)),
-                text("POINTS: " .. State.points(), bold(16)),
+                text("POINTS: " .. State.availablePoints(), bold(16)),
             },
         },
     }
@@ -434,7 +434,7 @@ function Dashboard:buildRightColumn(width, height)
         { ICON.book, "PREVIOUS MISSIONS", function() self:showPrevious() end },
         { ICON.compass, "FACT FILES", function() self:comingSoon("Fact Files") end },
         { ICON.chart, "MY PROGRESS", function() self:showProgress() end },
-        { ICON.trophy, "UNLOCKS", function() self:comingSoon("Unlocks") end },
+        { ICON.trophy, "UNLOCKS", function() self:showUnlocks() end },
         { ICON.cog, "SETTINGS", function() self:onShowSettings() end },
     }
     local gap = 4
@@ -551,11 +551,53 @@ function Dashboard:showProgress()
     local streak = State.streak(self.props.id)
     local finished = State.completedCount()
     UIManager:show(InfoMessage:new{
-        text = string.format("Points: %d\nDaily missions: %d x 1\nBig Reads: %d x 3\nStreak: %d day%s\nToday's mission: %s",
-            State.points(), finished, State.bigReadCompletedCount(),
+        text = string.format("Available points: %d\nEarned: %d\nSpent on unlocks: %d\nDaily missions: %d x 1\nBig Reads: %d x 3\nStreak: %d day%s\nToday's mission: %s",
+            State.availablePoints(), State.points(), State.spentPoints(), finished, State.bigReadCompletedCount(),
             streak, streak == 1 and "" or "s",
             self.finished_today and "finished" or "not finished yet"),
     })
+end
+
+function Dashboard:showUnlocks()
+    local dialog
+    local buttons = {}
+    for _, item in ipairs(State.UNLOCKS) do
+        local reward = item
+        local label = reward.title .. "\n" .. reward.cost .. " points / GBP " .. reward.pounds
+        if State.unlockPurchased(reward.id) then
+            label = reward.title .. "\nREQUESTED - " .. reward.cost .. " points"
+        end
+        table.insert(buttons, { { text = label, callback = function()
+            UIManager:close(dialog)
+            if State.unlockPurchased(reward.id) then
+                UIManager:show(InfoMessage:new{ text = "Already requested. Ask your parent about the purchase." })
+                return
+            end
+            if State.availablePoints() < reward.cost then
+                UIManager:show(InfoMessage:new{ text = string.format("You need %d more points to unlock this.", reward.cost - State.availablePoints()) })
+                return
+            end
+            UIManager:show(ConfirmBox:new{
+                text = string.format("Spend %d points on %s? This sends a purchase request to your parent. It does not buy the DLC automatically.", reward.cost, reward.title),
+                ok_text = "Spend points",
+                ok_callback = function()
+                    local ok, err = State.purchaseUnlock(reward.id)
+                    if ok then
+                        self:refresh()
+                        UIManager:show(InfoMessage:new{ text = "Unlock requested! Ask your parent to buy the DLC. Your request will be backed up when the Kindle syncs." })
+                    else
+                        UIManager:show(InfoMessage:new{ text = err })
+                    end
+                end,
+            })
+        end } })
+    end
+    table.insert(buttons, { { text = "Back", callback = function() UIManager:close(dialog) end } })
+    dialog = ButtonDialog:new{
+        title = string.format("UNLOCK STORE  |  %d points\n5 points = GBP 1", State.availablePoints()),
+        buttons = buttons,
+    }
+    UIManager:show(dialog)
 end
 
 function Dashboard:comingSoon(name)
