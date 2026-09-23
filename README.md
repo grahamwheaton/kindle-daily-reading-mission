@@ -91,3 +91,22 @@ its library after it is safely ejected and disconnected.
   `/usr/local/rupert`.
 - The original root crontab is backed up as
   `/mnt/us/rupert-mission/root-crontab.original`.
+
+
+## Signed device releases from a terminal
+
+On a computer with [GitHub CLI](https://cli.github.com/) installed, run
+`gh auth login` once using an account with access to the private
+`grahamwheaton/rupert-device-signing` repository. Thereafter:
+
+```sh
+sh updater/request-release.sh       # choose the next published version
+sh updater/request-release.sh 29    # choose a specific version
+```
+
+The private workflow signs the current code and publishes it to the content
+repository. The signing key remains a secret in that private repository.
+The Kindle installs the signed update on its next sync. The same private
+workflow also accepts a version request committed to
+`release-requests/version.txt` in the signing repository, which permits
+releases through the GitHub connector without a browser session.
