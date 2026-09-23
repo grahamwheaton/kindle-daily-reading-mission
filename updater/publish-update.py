@@ -44,6 +44,7 @@ def collect(staging, content):
         "runtime/device-update.sh": HERE / "device-update.sh",
         "state/open-current.sh": PROJECT / "launcher/open-current.sh",
         "state/sleep.png": PROJECT / "assets/sleep-screen.png",
+        "state/unlock-snowrunner.png": PROJECT / "assets/unlock-snowrunner.png",
     }
     # The launcher app is a build output, so it is not in the repository: fall
     # back to the copy already published, which is what the Kindle is running.
