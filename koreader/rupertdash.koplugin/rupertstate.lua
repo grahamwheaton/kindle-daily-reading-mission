@@ -148,13 +148,27 @@ function State.streak(current_id)
     return count
 end
 
-function State.completedCount()
+local function completionCount(directory)
     local count = 0
-    if lfs.attributes(State.COMPLETED_DIR, "mode") ~= "directory" then return 0 end
-    for name in lfs.dir(State.COMPLETED_DIR) do
+    if lfs.attributes(directory, "mode") ~= "directory" then return 0 end
+    for name in lfs.dir(directory) do
         if name:match("%.json$") then count = count + 1 end
     end
     return count
+end
+
+function State.completedCount()
+    return completionCount(State.COMPLETED_DIR)
+end
+
+function State.bigReadCompletedCount()
+    return completionCount(State.BIGREAD_COMPLETED_DIR)
+end
+
+-- Completion records are the ledger. Re-reading a book cannot award points
+-- twice, because each mission or Big Read ID has only one completion file.
+function State.points()
+    return State.completedCount() + 3 * State.bigReadCompletedCount()
 end
 
 local function trimmed(path)
