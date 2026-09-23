@@ -219,7 +219,7 @@ function Dashboard:buildStatusBar(width)
         align = "center",
         text(wifiIcon(), symbols(22)),
         HorizontalSpan:new{ width = 14 },
-        text("RUPERT  v25", bold(17)),
+        text("RUPERT  v26", bold(17)),
     }
     local right = HorizontalGroup:new{
         align = "center",
@@ -422,6 +422,7 @@ function Dashboard:buildRightColumn(width, height)
                     text(tostring(streak), bold(44)),
                 },
                 text(streak == 1 and "DAY" or "DAYS", bold(16)),
+                text("POINTS: " .. State.points(), bold(16)),
             },
         },
     }
@@ -550,8 +551,9 @@ function Dashboard:showProgress()
     local streak = State.streak(self.props.id)
     local finished = State.completedCount()
     UIManager:show(InfoMessage:new{
-        text = string.format("Missions finished: %d\nStreak: %d day%s\nToday's mission: %s",
-            finished, streak, streak == 1 and "" or "s",
+        text = string.format("Points: %d\nDaily missions: %d x 1\nBig Reads: %d x 3\nStreak: %d day%s\nToday's mission: %s",
+            State.points(), finished, State.bigReadCompletedCount(),
+            streak, streak == 1 and "" or "s",
             self.finished_today and "finished" or "not finished yet"),
     })
 end
