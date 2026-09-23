@@ -14,7 +14,7 @@ deliberately from KOReader's own menus. Bump PROFILE_VERSION to re-apply.
 
 local logger = require("logger")
 
-local PROFILE_VERSION = 3
+local PROFILE_VERSION = 4
 
 local Reading = {}
 
@@ -29,6 +29,9 @@ local SETTINGS = {
     -- Reaching the last page pops up a dialog full of choices he does not
     -- need. Let him press Home instead.
     end_document_action = "nothing",
+    -- Back leaves the reader immediately. The dashboard decides whether to
+    -- show today's home screen or the previous-missions shelf afterward.
+    back_in_reader = "filebrowser",
     -- His own sleep screen rather than a book cover or a message.
     -- rupert-screensaver.sh puts the image there and also replaces the
     -- Kindle framework's own screensavers with it.
