@@ -219,7 +219,7 @@ function Dashboard:buildStatusBar(width)
         align = "center",
         text(wifiIcon(), symbols(22)),
         HorizontalSpan:new{ width = 14 },
-                text("RUPERT  v28", bold(17)),
+        text("RUPERT  v29", bold(17)),
     }
     local right = HorizontalGroup:new{
         align = "center",
