@@ -26,6 +26,11 @@ State.BIGREAD_DIR = State.STATE_DIR .. "/bigread"
 State.BIGREAD_ID_FILE = State.STATE_DIR .. "/bigread-id"
 State.BIGREAD_PROGRESS = State.STATE_DIR .. "/bigread-progress"
 State.BIGREAD_COMPLETED_DIR = State.STATE_DIR .. "/completed-bigread"
+State.UNLOCKS_DIR = State.STATE_DIR .. "/unlocks"
+
+State.UNLOCKS = {
+    { id = "snowrunner-season-16-high-voltage", title = "SnowRunner: Season 16 - High Voltage", pounds = 5, cost = 25 },
+}
 
 function State.readProperties(path)
     local props = {}
@@ -169,6 +174,47 @@ end
 -- twice, because each mission or Big Read ID has only one completion file.
 function State.points()
     return State.completedCount() + 3 * State.bigReadCompletedCount()
+end
+
+function State.unlockPurchased(id)
+    return id ~= nil and id:match("^[%w-]+$") ~= nil
+        and lfs.attributes(State.UNLOCKS_DIR .. "/" .. id .. ".json", "mode") == "file"
+end
+
+function State.spentPoints()
+    local spent = 0
+    for _, item in ipairs(State.UNLOCKS) do
+        if State.unlockPurchased(item.id) then spent = spent + item.cost end
+    end
+    return spent
+end
+
+function State.availablePoints()
+    return math.max(0, State.points() - State.spentPoints())
+end
+
+-- A purchase is a request for the parent to buy the reward. One record per
+-- catalog ID prevents a second charge and lets the reporter back it up.
+function State.purchaseUnlock(id)
+    local item
+    for _, candidate in ipairs(State.UNLOCKS) do
+        if candidate.id == id then item = candidate; break end
+    end
+    if not item then return false, "Unknown unlock" end
+    if State.unlockPurchased(id) then return false, "Already unlocked" end
+    if State.availablePoints() < item.cost then return false, "Not enough points yet" end
+    lfs.mkdir(State.UNLOCKS_DIR)
+    local path = State.UNLOCKS_DIR .. "/" .. id .. ".json"
+    local f = io.open(path .. ".part", "w")
+    if not f then return false, "Could not save the unlock" end
+    f:write(string.format('{"unlock":"%s","title":"%s","points":%d,"pounds":%d,"requested_at":"%s","status":"requested"}\n',
+        item.id, item.title, item.cost, item.pounds, os.date("!%Y-%m-%dT%H:%M:%SZ")))
+    f:close()
+    if not os.rename(path .. ".part", path) then
+        os.remove(path .. ".part")
+        return false, "Could not save the unlock"
+    end
+    return true
 end
 
 local function trimmed(path)
