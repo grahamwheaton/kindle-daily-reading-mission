@@ -18,6 +18,7 @@ RUNTIME=/usr/local/rupert
 STATE=/mnt/us/rupert-mission
 COMPLETED="$STATE/completed"
 BIGREAD_COMPLETED="$STATE/completed-bigread"
+UNLOCKS="$STATE/unlocks"
 TOKEN_FILE="$RUNTIME/github-token"
 REPO_FILE="$RUNTIME/github-repo"
 LOG="$STATE/report.log"
@@ -33,7 +34,7 @@ log() {
 
 [ -f "$TOKEN_FILE" ] && [ -f "$REPO_FILE" ] || exit 0
 [ -x "$CURL" ] && [ -f "$CA" ] || exit 0
-[ -d "$COMPLETED" ] || [ -d "$BIGREAD_COMPLETED" ] || exit 0
+[ -d "$COMPLETED" ] || [ -d "$BIGREAD_COMPLETED" ] || [ -d "$UNLOCKS" ] || exit 0
 
 TOKEN=$(cat "$TOKEN_FILE")
 REPO=$(cat "$REPO_FILE")
@@ -91,6 +92,7 @@ report_dir() {
 
 report_dir "$COMPLETED" completions mission
 report_dir "$BIGREAD_COMPLETED" bigreads "Big Read"
+report_dir "$UNLOCKS" unlocks "Unlock requested:"
 
 rm -f "$BODY" "$RESPONSE"
 exit 0
