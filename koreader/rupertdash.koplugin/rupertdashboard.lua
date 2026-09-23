@@ -13,6 +13,7 @@ cover embedded in the mission book.
 local Blitbuffer = require("ffi/blitbuffer")
 local ButtonDialog = require("ui/widget/buttondialog")
 local CenterContainer = require("ui/widget/container/centercontainer")
+local ConfirmBox = require("ui/widget/confirmbox")
 local Device = require("device")
 local FocusManager = require("ui/widget/focusmanager")
 local Font = require("ui/font")
@@ -218,7 +219,7 @@ function Dashboard:buildStatusBar(width)
         align = "center",
         text(wifiIcon(), symbols(22)),
         HorizontalSpan:new{ width = 14 },
-        text("RUPERT  v24", bold(17)),
+        text("RUPERT  v25", bold(17)),
     }
     local right = HorizontalGroup:new{
         align = "center",
@@ -571,6 +572,21 @@ function Dashboard:onShowSettings()
             { { text = "Open file browser", callback = function()
                 UIManager:close(dialog)
                 UIManager:close(self)
+            end } },
+            { { text = "Reboot Kindle", callback = function()
+                UIManager:close(dialog)
+                UIManager:show(ConfirmBox:new{
+                    text = "Reboot the Kindle now? Your reading position will be saved.",
+                    ok_text = "Reboot",
+                    ok_callback = function()
+                        -- KOReader does not advertise its built-in reboot action on
+                        -- Kindle 4. Use the device's own reboot command after saving.
+                        Device:saveSettings()
+                        UIManager:nextTick(function()
+                            os.execute("sync; /sbin/reboot")
+                        end)
+                    end,
+                })
             end } },
             { { text = "Exit to Kindle", callback = function()
                 UIManager:close(dialog)
