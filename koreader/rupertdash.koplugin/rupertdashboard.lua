@@ -121,7 +121,14 @@ local Dashboard = FocusManager:extend{
 -- asks for the dashboard itself on the way out.
 function Dashboard.showIfNeeded(file_manager)
     if Dashboard.instance then return end
-    UIManager:show(Dashboard:new{ file_manager = file_manager }, "full")
+    local dashboard = Dashboard:new{ file_manager = file_manager }
+    UIManager:show(dashboard, "full")
+    if Dashboard.return_to_archive then
+        Dashboard.return_to_archive = false
+        UIManager:nextTick(function()
+            if Dashboard.instance == dashboard then dashboard:showPrevious() end
+        end)
+    end
 end
 
 function Dashboard:init()
@@ -219,7 +226,7 @@ function Dashboard:buildStatusBar(width)
         align = "center",
         text(wifiIcon(), symbols(22)),
         HorizontalSpan:new{ width = 14 },
-        text("RUPERT  v29", bold(17)),
+        text("RUPERT  v30", bold(17)),
     }
     local right = HorizontalGroup:new{
         align = "center",
@@ -414,17 +421,11 @@ function Dashboard:buildRightColumn(width, height)
             dimen = Geom:new{ w = width - 22, h = streak_h - 32 },
             VerticalGroup:new{
                 align = "center",
-                text("STREAK", bold(14)),
-                VerticalSpan:new{ width = 4 },
-                HorizontalGroup:new{
-                    align = "center",
-                    text(ICON.fire, symbols(32)),
-                    HorizontalSpan:new{ width = 6 },
-                    text(tostring(streak), bold(36)),
-                },
-                text(streak == 1 and "DAY" or "DAYS", bold(13)),
-                VerticalSpan:new{ width = 4 },
-                text(State.availablePoints() .. " POINTS", bold(14)),
+                text("READING STREAK", bold(13)),
+                VerticalSpan:new{ width = 9 },
+                text(streak .. (streak == 1 and " DAY" or " DAYS"), bold(24)),
+                VerticalSpan:new{ width = 9 },
+                text(State.availablePoints() .. " POINTS", bold(18)),
             },
         },
     }
@@ -504,6 +505,7 @@ function Dashboard:focusTo(x, y)
 end
 
 function Dashboard:openBook(file)
+    Dashboard.return_to_archive = file ~= MISSION_FILE
     UIManager:close(self)
     require("apps/reader/readerui"):showReader(file)
 end
