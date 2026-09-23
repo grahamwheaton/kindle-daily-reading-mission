@@ -183,6 +183,10 @@ function Archive:buildTile(mission, width, height)
         content = content,
         radius = 12,
         callback = function()
+            -- Completion is written by the reader after the book closes. The
+            -- archive's status labels were built before opening the book, so
+            -- discard this screen and rebuild them on the next visit.
+            UIManager:close(self)
             if self.on_open then self.on_open(mission.file) end
         end,
     }
