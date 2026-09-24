@@ -11,6 +11,7 @@ history. The uploader marks what it has sent with a matching .sent file.
 
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
+local JSON = require("json")
 
 local State = {
     STATE_DIR = "/mnt/us/rupert-mission",
@@ -27,10 +28,32 @@ State.BIGREAD_ID_FILE = State.STATE_DIR .. "/bigread-id"
 State.BIGREAD_PROGRESS = State.STATE_DIR .. "/bigread-progress"
 State.BIGREAD_COMPLETED_DIR = State.STATE_DIR .. "/completed-bigread"
 State.UNLOCKS_DIR = State.STATE_DIR .. "/unlocks"
+State.UNLOCK_CATALOG = State.STATE_DIR .. "/unlock-catalog"
 
-State.UNLOCKS = {
+local LEGACY_UNLOCKS = {
     { id = "snowrunner-season-16-high-voltage", title = "SnowRunner: Season 16 - High Voltage", pounds = 5, cost = 25 },
 }
+
+-- Reload on each opening: the device sync can install a catalog while KOReader
+-- is running. A present but empty file deliberately removes all store items.
+function State.getUnlocks()
+    local f = io.open(State.UNLOCK_CATALOG .. "/catalog.tsv", "r")
+    if not f then return LEGACY_UNLOCKS end
+    local items = {}
+    for line in f:lines() do
+        local id, pence, cost, title, digest = line:match("^([%w-]+)\t(%d+)\t(%d+)\t([^\t]+)\t([a-f0-9]+)$")
+        if id and #digest == 64 and not id:find("[^a-z0-9-]")
+            and lfs.attributes(State.UNLOCK_CATALOG .. "/images/" .. id .. ".png", "mode") == "file"
+        then
+            table.insert(items, {
+                id = id, title = title, pounds = tonumber(pence) / 100,
+                cost = tonumber(cost), image = State.UNLOCK_CATALOG .. "/images/" .. id .. ".png",
+            })
+        end
+    end
+    f:close()
+    return items
+end
 
 function State.readProperties(path)
     local props = {}
@@ -183,8 +206,20 @@ end
 
 function State.spentPoints()
     local spent = 0
-    for _, item in ipairs(State.UNLOCKS) do
-        if State.unlockPurchased(item.id) then spent = spent + item.cost end
+    if lfs.attributes(State.UNLOCKS_DIR, "mode") ~= "directory" then return 0 end
+    -- Count saved purchases even after an item is removed from the store.
+    for name in lfs.dir(State.UNLOCKS_DIR) do
+        if name:match("^[%w-]+%.json$") then
+            local f = io.open(State.UNLOCKS_DIR .. "/" .. name, "r")
+            if f then
+                local ok, record = pcall(JSON.decode, f:read("*a"))
+                f:close()
+                if ok and type(record) == "table" and type(record.points) == "number"
+                    and record.points >= 0 then
+                    spent = spent + record.points
+                end
+            end
+        end
     end
     return spent
 end
@@ -197,7 +232,7 @@ end
 -- catalog ID prevents a second charge and lets the reporter back it up.
 function State.purchaseUnlock(id)
     local item
-    for _, candidate in ipairs(State.UNLOCKS) do
+    for _, candidate in ipairs(State.getUnlocks()) do
         if candidate.id == id then item = candidate; break end
     end
     if not item then return false, "Unknown unlock" end
@@ -207,8 +242,11 @@ function State.purchaseUnlock(id)
     local path = State.UNLOCKS_DIR .. "/" .. id .. ".json"
     local f = io.open(path .. ".part", "w")
     if not f then return false, "Could not save the unlock" end
-    f:write(string.format('{"unlock":"%s","title":"%s","points":%d,"pounds":%d,"requested_at":"%s","status":"requested"}\n',
-        item.id, item.title, item.cost, item.pounds, os.date("!%Y-%m-%dT%H:%M:%SZ")))
+    f:write(JSON.encode({
+        unlock = item.id, title = item.title, points = item.cost,
+        pounds = item.pounds, requested_at = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+        status = "requested",
+    }), "\n")
     f:close()
     if not os.rename(path .. ".part", path) then
         os.remove(path .. ".part")
