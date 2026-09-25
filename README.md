@@ -84,6 +84,10 @@ its library after it is safely ejected and disconnected.
   `grahamwheaton/rupert-reading-missions` repository.
 - While awake, the Kindle checks the published mission ID every five minutes.
   It downloads only when that ID changes, using certificate-validated HTTPS.
+- The wake listener arms the Kindle 4 RTC for 06:45 device-local time when it
+  suspends. On resume it checks for the new story in the background. The Kindle
+  clock and timezone must be correct; clock-change nights may wake an hour out.
+- The wake schedule requires a signed device release before it reaches the Kindle.
 - The current mission appears as `documents/RupertsMission.mobi`.
 - The Kindle clock is not used to decide whether a mission is new.
 - Runtime state and logs are under `/mnt/us/rupert-mission`; the isolated
