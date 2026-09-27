@@ -623,8 +623,7 @@ function Dashboard:onShowSettings()
                     self:checkForUpdate()
                     return
                 end
-                UIManager:show(InfoMessage:new{ text = "Installing the signed update. Keep the Kindle awake; then exit and reopen KOReader." })
-                os.execute("/bin/sh /usr/local/rupert/sync.sh --install-update >/dev/null 2>&1 &")
+                self:installUpdate(available)
             end } },
             { { text = "Refresh books and stories", callback = function()
                 UIManager:close(dialog)
@@ -663,15 +662,23 @@ end
 function Dashboard:checkForUpdate()
     local result_path = State.STATE_DIR .. "/update-check-result"
     os.remove(result_path)
-    local waiting = InfoMessage:new{ text = "Checking for a signed update. Connecting to Wi-Fi..." }
+    local waiting = InfoMessage:new{ text = "Checking for update. Connecting to Wi-Fi ." }
     UIManager:show(waiting)
     os.execute("/bin/sh /usr/local/rupert/sync.sh --check-update >/dev/null 2>&1 &")
     local attempts = 0
     local function poll()
-        if Dashboard.instance ~= self then return end
+        if Dashboard.instance ~= self then
+            UIManager:close(waiting)
+            return
+        end
         local result = firstLine(result_path)
         if not result and attempts < 150 then
             attempts = attempts + 1
+            if attempts % 2 == 0 then
+                UIManager:close(waiting)
+                waiting = InfoMessage:new{ text = "Checking for update" .. string.rep(" .", (math.floor(attempts / 2) % 3) + 1) .. "\nConnecting to Wi-Fi and verifying signature" }
+                UIManager:show(waiting)
+            end
             UIManager:scheduleIn(2, poll)
             return
         end
@@ -692,6 +699,43 @@ function Dashboard:checkForUpdate()
         end
     end
     UIManager:scheduleIn(2, poll)
+end
+
+function Dashboard:installUpdate(version)
+    local marker = State.STATE_DIR .. "/install-finished"
+    os.remove(marker)
+    local waiting
+    local attempts = 0
+    local function poll()
+        if Dashboard.instance ~= self then
+            if waiting then UIManager:close(waiting) end
+            return
+        end
+        if firstLine(State.STATE_DIR .. "/installed-device-version") == version then
+            if waiting then UIManager:close(waiting) end
+            UIManager:show(InfoMessage:new{ text = "Update " .. version .. " installed. Relaunching Rupert's Reader..." })
+            -- The helper waits for KOReader to exit before opening it again.
+            os.execute("( i=0; while pidof reader.lua >/dev/null 2>&1 && [ \"$i\" -lt 60 ]; do sleep 1; i=$((i+1)); done; /bin/sh /mnt/us/rupert-mission/open-current.sh ) >/dev/null 2>&1 &")
+            self:onExitToKindle()
+            return
+        end
+        if firstLine(marker) or attempts >= 150 then
+            if waiting then UIManager:close(waiting) end
+            UIManager:show(InfoMessage:new{ text = "Update did not install. Check Wi-Fi and try again. Details: rupert-mission/update.log" })
+            return
+        end
+        if attempts % 2 == 0 then
+            if waiting then UIManager:close(waiting) end
+            local position = (math.floor(attempts / 2) % 9) + 1
+            local bar = "[" .. string.rep(" ", position - 1) .. "###" .. string.rep(" ", 11 - position) .. "]"
+            waiting = InfoMessage:new{ text = "Installing signed update " .. version .. "\n" .. bar .. "\nKeep the Kindle awake" }
+            UIManager:show(waiting)
+        end
+        attempts = attempts + 1
+        UIManager:scheduleIn(2, poll)
+    end
+    os.execute("( /bin/sh /usr/local/rupert/sync.sh --install-update >/dev/null 2>&1; echo done > /mnt/us/rupert-mission/install-finished ) &")
+    poll()
 end
 
 function Dashboard:refresh()
