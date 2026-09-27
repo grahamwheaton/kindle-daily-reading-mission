@@ -402,6 +402,10 @@ BigRead.onLeaveBack = BigRead.onLeave
 
 function BigRead:onCloseWidget()
     UIManager:setDirty(nil, "full")
+    UIManager:nextTick(function()
+        local Dashboard = require("rupertdashboard")
+        if Dashboard.instance then Dashboard.instance:refresh() end
+    end)
 end
 
 return BigRead
