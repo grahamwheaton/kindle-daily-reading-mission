@@ -614,8 +614,7 @@ function Dashboard:onShowSettings()
             { { text = available and ("INSTALL UPDATE " .. available) or "CHECK FOR UPDATE", callback = function()
                 UIManager:close(dialog)
                 if not available then
-                    UIManager:show(InfoMessage:new{ text = "Checking for updates. Open Settings again in a moment." })
-                    os.execute("/bin/sh /usr/local/rupert/sync.sh --scheduled >/dev/null 2>&1 &")
+                    self:checkForUpdate()
                     return
                 end
                 UIManager:show(InfoMessage:new{ text = "Installing the signed update. Keep the Kindle awake; then exit and reopen KOReader." })
@@ -653,6 +652,40 @@ function Dashboard:onShowSettings()
     }
     UIManager:show(dialog)
     return true
+end
+
+function Dashboard:checkForUpdate()
+    local result_path = State.STATE_DIR .. "/update-check-result"
+    os.remove(result_path)
+    local waiting = InfoMessage:new{ text = "Checking for a signed update. Connecting to Wi-Fi..." }
+    UIManager:show(waiting)
+    os.execute("/bin/sh /usr/local/rupert/sync.sh --check-update >/dev/null 2>&1 &")
+    local attempts = 0
+    local function poll()
+        if Dashboard.instance ~= self then return end
+        local result = firstLine(result_path)
+        if not result and attempts < 150 then
+            attempts = attempts + 1
+            UIManager:scheduleIn(2, poll)
+            return
+        end
+        UIManager:close(waiting)
+        if result == "available" then
+            self:refresh()
+            UIManager:nextTick(function()
+                if Dashboard.instance then Dashboard.instance:onShowSettings() end
+            end)
+        elseif result == "current" then
+            UIManager:show(InfoMessage:new{ text = "The Kindle is up to date." })
+        elseif result == "offline" then
+            UIManager:show(InfoMessage:new{ text = "Wi-Fi did not connect. Try the check again." })
+        elseif result == "busy" then
+            UIManager:show(InfoMessage:new{ text = "Another sync is running. Try again shortly." })
+        else
+            UIManager:show(InfoMessage:new{ text = "Could not check for an update. See rupert-mission/update.log for details." })
+        end
+    end
+    UIManager:scheduleIn(2, poll)
 end
 
 function Dashboard:refresh()

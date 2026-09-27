@@ -54,12 +54,13 @@ field() { sed -n "s/^$1=//p" "$WORK/manifest.txt" | head -1; }
 valid_hash() { echo "$1" | grep -q '^[0-9A-Fa-f]\{64\}$'; }
 lower() { echo "$1" | tr A-F a-f; }
 
-[ -x "$CURL" ] && [ -f "$CA" ] && [ -f "$PUB" ] || { log 'updater prerequisites missing'; exit 0; }
-fetch "$WORK/manifest.txt" "$BASE/manifest.txt" >> "$LOG" 2>&1 || { log 'manifest download failed'; exit 0; }
-fetch "$WORK/manifest.sig" "$BASE/manifest.sig" >> "$LOG" 2>&1 || { log 'manifest signature download failed'; exit 0; }
+[ -x "$CURL" ] && [ -f "$CA" ] && [ -f "$PUB" ] || { log 'updater prerequisites missing'; echo error > "$STATE/update-check-result"; exit 0; }
+fetch "$WORK/manifest.txt" "$BASE/manifest.txt" >> "$LOG" 2>&1 || { log 'manifest download failed'; echo error > "$STATE/update-check-result"; exit 0; }
+fetch "$WORK/manifest.sig" "$BASE/manifest.sig" >> "$LOG" 2>&1 || { log 'manifest signature download failed'; echo error > "$STATE/update-check-result"; exit 0; }
 
 if ! /usr/bin/openssl dgst -sha256 -verify "$PUB" -signature "$WORK/manifest.sig" "$WORK/manifest.txt" >> "$LOG" 2>&1; then
     log 'manifest signature rejected'
+    echo error > "$STATE/update-check-result"
     exit 0
 fi
 
@@ -70,14 +71,16 @@ if [ "$MANIFEST_HASH" = "$(cat "$STATE/last-device-manifest.sha256" 2>/dev/null)
     # hash, but no human-readable version file. Backfill it from the signed
     # manifest on the next check so Settings does not show an old version.
     case "$VERSION" in
-        *[!0-9]*|'') log 'signed manifest has invalid version'; exit 0 ;;
+        *[!0-9]*|'') log 'signed manifest has invalid version'; echo error > "$STATE/update-check-result"; exit 0 ;;
         *) echo "$VERSION" > "$STATE/installed-device-version" ;;
     esac
     rm -f "$STATE/available-device-version"
+    echo current > "$STATE/update-check-result"
     exit 0
 fi
 if [ "$1" = "--check" ]; then
     echo "$VERSION" > "$STATE/available-device-version"
+    echo available > "$STATE/update-check-result"
     log "signed update $VERSION available"
     exit 0
 fi
