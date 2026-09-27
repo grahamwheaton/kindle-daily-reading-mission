@@ -66,6 +66,13 @@ fi
 MANIFEST_HASH=$(digest "$WORK/manifest.txt")
 VERSION=$(field version)
 if [ "$MANIFEST_HASH" = "$(cat "$STATE/last-device-manifest.sha256" 2>/dev/null)" ]; then
+    # Devices upgraded by the previous updater have the installed manifest
+    # hash, but no human-readable version file. Backfill it from the signed
+    # manifest on the next check so Settings does not show an old version.
+    case "$VERSION" in
+        *[!0-9]*|'') log 'signed manifest has invalid version'; exit 0 ;;
+        *) echo "$VERSION" > "$STATE/installed-device-version" ;;
+    esac
     rm -f "$STATE/available-device-version"
     exit 0
 fi

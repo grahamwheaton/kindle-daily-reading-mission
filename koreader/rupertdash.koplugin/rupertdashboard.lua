@@ -252,7 +252,7 @@ function Dashboard:buildStatusBar(width)
         align = "center",
         text(wifiIcon(), symbols(22)),
         HorizontalSpan:new{ width = 14 },
-        text("RUPERT  v30", bold(17)),
+        text("RUPERT  v" .. (firstLine(State.STATE_DIR .. "/installed-device-version") or "?"), bold(17)),
     }
     local right = HorizontalGroup:new{
         align = "center",
@@ -606,7 +606,7 @@ end
 
 function Dashboard:onShowSettings()
     local available = firstLine(State.STATE_DIR .. "/available-device-version")
-    local installed = firstLine(State.STATE_DIR .. "/installed-device-version") or "33 or earlier"
+    local installed = firstLine(State.STATE_DIR .. "/installed-device-version") or "checking"
     local dialog
     dialog = ButtonDialog:new{
         title = "Settings  |  Version " .. installed .. (available and "  |  UPDATE " .. available .. " READY" or ""),
