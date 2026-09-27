@@ -164,7 +164,7 @@ function Dashboard:init()
     self.finished_today = State.isCompleted(self.props.id)
     self.archive = archivedMissions(self.props.id)
 
-    self.key_events.ExitToKindle = { { "Home" } }
+    self.key_events.StayHome = { { "Home" } }
     self.key_events.ShowSettings = { { "Menu" } }
     self.key_events.IgnoreBack = { { "Back" } }
     -- The side page-turn buttons walk the tiles, one binding per key.
@@ -248,11 +248,13 @@ end
 
 function Dashboard:buildStatusBar(width)
     local date = os.date("%a %d %b %Y"):upper()
+    local available = firstLine(State.STATE_DIR .. "/available-device-version")
+    local installed = firstLine(State.STATE_DIR .. "/installed-device-version") or "?"
     local left = HorizontalGroup:new{
         align = "center",
         text(wifiIcon(), symbols(22)),
         HorizontalSpan:new{ width = 14 },
-        text("RUPERT  v" .. (firstLine(State.STATE_DIR .. "/installed-device-version") or "?"), bold(17)),
+        text("RUPERT v" .. installed .. (available and "  UPDATE AVAILABLE" or ""), bold(available and 14 or 17)),
     }
     local right = HorizontalGroup:new{
         align = "center",
@@ -611,6 +613,10 @@ function Dashboard:onShowSettings()
     dialog = ButtonDialog:new{
         title = "Settings  |  Version " .. installed .. (available and "  |  UPDATE " .. available .. " READY" or ""),
         buttons = {
+            { { text = "Today's questions (left / right)", callback = function()
+                UIManager:close(dialog)
+                self:showTodayQuestions()
+            end } },
             { { text = available and ("INSTALL UPDATE " .. available) or "CHECK FOR UPDATE", callback = function()
                 UIManager:close(dialog)
                 if not available then
@@ -693,11 +699,28 @@ function Dashboard:refresh()
     UIManager:show(Dashboard:new{ file_manager = self.file_manager }, "full")
 end
 
-function Dashboard:onExitToKindle()
-    UIManager:close(self)
-    if self.file_manager then
-        self.file_manager:onClose()
+function Dashboard:showTodayQuestions()
+    local Quiz = require("rupertquiz")
+    local id = self.props.id
+    local data = Quiz.load(id)
+    if not data then
+        UIManager:show(InfoMessage:new{ text = "Questions are not on the Kindle yet. Refresh books and stories, then try again." })
+        return true
     end
+    UIManager:show(Quiz:new{ id = id, data = data }, "full")
+    return true
+end
+
+function Dashboard:onStayHome()
+    return true
+end
+
+function Dashboard:onExitToKindle()
+    if self.exiting_to_kindle then return true end
+    self.exiting_to_kindle = true
+    UIManager:close(self)
+    local file_manager = self.file_manager
+    if file_manager then UIManager:nextTick(function() file_manager:onClose() end) end
     return true
 end
 
