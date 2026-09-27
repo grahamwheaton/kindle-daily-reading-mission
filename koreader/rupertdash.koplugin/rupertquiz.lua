@@ -42,6 +42,7 @@ function Quiz:init()
     self.key_events.RightPageBack = { { "RPgBack" }, event = "Choose", args = 2 }
     self.key_events.SelectLeft = { { "Left" }, event = "Select", args = 1 }
     self.key_events.SelectRight = { { "Right" }, event = "Select", args = 2 }
+    self.key_events.Continue = { { "Press" } }
     self.key_events.Leave = { { "Back" } }
     self.key_events.LeaveHome = { { "Home" } }
     self:build()
@@ -51,6 +52,25 @@ function Quiz:build()
     local w, h = self.dimen.w, self.dimen.h
     local question = self.data.questions[self.index]
     if not question then return end
+    if self.feedback then
+        self.layout = {}
+        self[1] = FrameContainer:new{
+            width = w, height = h, bordersize = 0, padding = 22,
+            background = Blitbuffer.COLOR_WHITE,
+            VerticalGroup:new{
+                align = "left",
+                TextWidget:new{ text = string.format("QUESTION %d / %d", self.index, #self.data.questions), face = face(20) },
+                VerticalSpan:new{ width = 85 },
+                TextWidget:new{ text = self.feedback.correct and "RIGHT ANSWER!" or "HAVE ANOTHER LOOK", face = face(30) },
+                VerticalSpan:new{ width = 35 },
+                TextBoxWidget:new{ text = "The answer is: " .. question.choices[question.correct], face = face(27), width = w - 50, height = 170,
+                    height_adjust = true, height_overflow_show_ellipsis = true },
+                VerticalSpan:new{ width = 95 },
+                TextWidget:new{ text = "Press the centre button to continue", face = normal(18) },
+            },
+        }
+        return
+    end
     local answer_w = math.floor((w - 42) / 2)
     local answers = {}
     for i = 1, 2 do
@@ -85,6 +105,7 @@ function Quiz:build()
 end
 
 function Quiz:onSelect(side)
+    if self.feedback then return true end
     self.selected_side = side
     self:build()
     UIManager:setDirty(self, "ui")
@@ -92,9 +113,20 @@ function Quiz:onSelect(side)
 end
 
 function Quiz:onChoose(side)
+    if self.feedback then return true end
     local question = self.data.questions[self.index]
     if not question then return true end
-    if question.correct == side then self.score = self.score + 1 end
+    local correct = question.correct == side
+    if correct then self.score = self.score + 1 end
+    self.feedback = { correct = correct }
+    self:build()
+    UIManager:setDirty(self, "ui")
+    return true
+end
+
+function Quiz:onContinue()
+    if not self.feedback then return true end
+    self.feedback = nil
     self.index = self.index + 1
     if self.index > #self.data.questions then
         local path = State.STATE_DIR .. "/quiz-results"

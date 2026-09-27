@@ -136,6 +136,36 @@ function RupertDash:offerQuestions()
     end)
 end
 
+-- The Kindle's existing word cursor and dictionary remain the selector. Once
+-- KOReader looks up a selected word, put its offline sound guide on top; Back
+-- returns to the dictionary. Words without a verified guide use the normal
+-- dictionary alone.
+function RupertDash:onWordLookedUp(word)
+    if not self.ui.document or type(word) ~= "string" then return end
+    local id = State.missionIdForFile(self.ui.document.file)
+    if not id then return end
+    if self.phonics_id ~= id then
+        self.phonics_id = id
+        self.phonics_words = nil
+        local file = io.open(State.STATE_DIR .. "/phonics/" .. id .. ".json", "r")
+        if file then
+            local ok, data = pcall(require("json").decode, file:read("*a"))
+            file:close()
+            if ok and type(data) == "table" then self.phonics_words = data end
+        end
+    end
+    local key = word:lower():match("^%s*([a-z]+)'?s?%s*$")
+    local sounds = key and self.phonics_words and self.phonics_words[key]
+    if type(sounds) ~= "string" then return end
+    UIManager:nextTick(function()
+        if self.ui.document then
+            UIManager:show(require("ui/widget/infomessage"):new{
+                text = word .. "\n\nSOUND IT OUT\n" .. sounds .. "\n\nSay the sounds, then blend them. Back returns to the dictionary.",
+            })
+        end
+    end)
+end
+
 -- Do not return true from either: other handlers (the end-of-book dialog,
 -- settings flushing) still need these events.
 function RupertDash:onEndOfBook()
