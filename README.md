@@ -114,3 +114,14 @@ The Kindle installs the signed update on its next sync. The same private
 workflow also accepts a version request committed to
 `release-requests/version.txt` in the signing repository, which permits
 releases through the GitHub connector without a browser session.
+
+## Reading updates and history
+
+The dashboard Settings screen shows **UPDATE READY** after a signed update check.
+Select **INSTALL UPDATE** there, keep the Kindle awake while it downloads, then
+exit and reopen KOReader to load the replaced plugin. **Refresh books and
+stories** checks for new daily missions and weekly Big Reads. Previous Missions
+shows daily and Big Read covers, the mission date, and the date Rupert read
+it. Daily reading earns one point, a Big Read earns three, and each consecutive
+five-day run of daily completions earns another three. Quiz answer cards are
+shown at the end of a daily book; the left and right page buttons answer them.

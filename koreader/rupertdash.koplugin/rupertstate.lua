@@ -27,6 +27,7 @@ State.BIGREAD_DIR = State.STATE_DIR .. "/bigread"
 State.BIGREAD_ID_FILE = State.STATE_DIR .. "/bigread-id"
 State.BIGREAD_PROGRESS = State.STATE_DIR .. "/bigread-progress"
 State.BIGREAD_COMPLETED_DIR = State.STATE_DIR .. "/completed-bigread"
+State.BIGREAD_ARCHIVE_DIR = State.STATE_DIR .. "/bigread-archive"
 State.UNLOCKS_DIR = State.STATE_DIR .. "/unlocks"
 State.UNLOCK_CATALOG = State.STATE_DIR .. "/unlock-catalog"
 
@@ -139,6 +140,17 @@ function State.isCompleted(id)
     return id ~= nil and lfs.attributes(State.COMPLETED_DIR .. "/" .. id .. ".json", "mode") == "file"
 end
 
+function State.finishedDate(id, bigread)
+    local directory = bigread and State.BIGREAD_COMPLETED_DIR or State.COMPLETED_DIR
+    local f = io.open(directory .. "/" .. tostring(id) .. ".json", "r")
+    if not f then return nil end
+    local ok, record = pcall(JSON.decode, f:read("*a"))
+    f:close()
+    if not ok or type(record) ~= "table" then return nil end
+    local stamp = record.finished_at
+    return type(stamp) == "string" and stamp:match("^(%d%d%d%d%-%d%d%-%d%d)") or nil
+end
+
 --- Record a finished mission. Returns true the first time only.
 function State.recordCompletion(id, title)
     if not id or State.isCompleted(id) then return false end
@@ -193,10 +205,29 @@ function State.bigReadCompletedCount()
     return completionCount(State.BIGREAD_COMPLETED_DIR)
 end
 
+-- Award once for each completed run of five dated daily missions. A gap
+-- starts a new run; rereading or a Big Read cannot extend the daily streak.
+function State.streakBonus()
+    if lfs.attributes(State.COMPLETED_DIR, "mode") ~= "directory" then return 0 end
+    local dates = {}
+    for name in lfs.dir(State.COMPLETED_DIR) do
+        local id = name:match("^(%d%d%d%d%-%d%d%-%d%d)%.json$")
+        if id then dates[#dates + 1] = id end
+    end
+    table.sort(dates)
+    local run, awards, previous = 0, 0, nil
+    for _, id in ipairs(dates) do
+        run = previous and previousDay(id) == previous and run + 1 or 1
+        if run % 5 == 0 then awards = awards + 1 end
+        previous = id
+    end
+    return awards * 3
+end
+
 -- Completion records are the ledger. Re-reading a book cannot award points
 -- twice, because each mission or Big Read ID has only one completion file.
 function State.points()
-    return State.completedCount() + 3 * State.bigReadCompletedCount()
+    return State.completedCount() + 3 * State.bigReadCompletedCount() + State.streakBonus()
 end
 
 function State.unlockPurchased(id)

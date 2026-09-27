@@ -14,7 +14,7 @@ deliberately from KOReader's own menus. Bump PROFILE_VERSION to re-apply.
 
 local logger = require("logger")
 
-local PROFILE_VERSION = 4
+local PROFILE_VERSION = 5
 
 local Reading = {}
 
@@ -32,6 +32,10 @@ local SETTINGS = {
     -- Back leaves the reader immediately. The dashboard decides whether to
     -- show today's home screen or the previous-missions shelf afterward.
     back_in_reader = "filebrowser",
+    -- Kindle 4 already has KOReader's D-pad word cursor. Up/down starts it;
+    -- the centre button looks up the selected word in an installed dictionary.
+    highlight_non_touch_dict_mode = true,
+    default_highlight_action = "dictionary",
     -- His own sleep screen rather than a book cover or a message.
     -- rupert-screensaver.sh puts the image there and also replaces the
     -- Kindle framework's own screensavers with it.

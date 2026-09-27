@@ -62,8 +62,8 @@ local BigRead = FocusManager:extend{
 }
 
 --- Load the story the sync downloaded, or nil with a reason.
-function BigRead.load()
-    local path = State.BIGREAD_DIR .. "/story.json"
+function BigRead.load(directory, id)
+    local path = (directory or State.BIGREAD_DIR) .. "/story.json"
     local file = io.open(path, "r")
     if not file then return nil, "No Big Read yet. A new one arrives each week." end
     local text = file:read("*a")
@@ -73,7 +73,8 @@ function BigRead.load()
         logger.warn("rupertdash: Big Read could not be read", story)
         return nil, "This week's Big Read could not be opened."
     end
-    story.id = State.bigReadId()
+    story.id = id or State.bigReadId()
+    story.directory = directory or State.BIGREAD_DIR
     return story
 end
 
@@ -183,7 +184,7 @@ function BigRead:build()
     local body = VerticalGroup:new{ align = "left" }
     local picture_h = 0
     if node.image then
-        local path = State.BIGREAD_DIR .. "/" .. node.image
+        local path = self.story.directory .. "/" .. node.image
         -- A picture that will not decode must cost him the picture, not the
         -- story: one arrived truncated from the writer before the build
         -- learned to check.
@@ -363,7 +364,9 @@ function BigRead:choose(index)
     if not choice or not self.story.nodes[choice.next] then return end
     self.node_id = choice.next
     self.pages_turned = (self.pages_turned or 0) + 1
-    State.saveBigReadProgress(self.story.id, self.node_id)
+    if self.story.directory == State.BIGREAD_DIR then
+        State.saveBigReadProgress(self.story.id, self.node_id)
+    end
     self:build()
     UIManager:setDirty(self, "ui")
 end
@@ -383,7 +386,9 @@ function BigRead:finish(ending)
             "pages; not recording it as read")
     end
     -- Either way the story starts again from the beginning next time.
-    State.saveBigReadProgress(self.story.id, self.story.start)
+    if self.story.directory == State.BIGREAD_DIR then
+        State.saveBigReadProgress(self.story.id, self.story.start)
+    end
     UIManager:close(self)
     UIManager:show(InfoMessage:new{ text = ending .. "\n\nYou finished this week's Big Read." })
 end

@@ -64,9 +64,16 @@ if ! /usr/bin/openssl dgst -sha256 -verify "$PUB" -signature "$WORK/manifest.sig
 fi
 
 MANIFEST_HASH=$(digest "$WORK/manifest.txt")
-[ "$MANIFEST_HASH" = "$(cat "$STATE/last-device-manifest.sha256" 2>/dev/null)" ] && exit 0
-
 VERSION=$(field version)
+if [ "$MANIFEST_HASH" = "$(cat "$STATE/last-device-manifest.sha256" 2>/dev/null)" ]; then
+    rm -f "$STATE/available-device-version"
+    exit 0
+fi
+if [ "$1" = "--check" ]; then
+    echo "$VERSION" > "$STATE/available-device-version"
+    log "signed update $VERSION available"
+    exit 0
+fi
 
 install_bundle() {
     BUNDLE_HASH=$(field bundle_sha256)
@@ -172,6 +179,8 @@ case $? in
 esac
 
 echo "$MANIFEST_HASH" > "$STATE/last-device-manifest.sha256"
+echo "$VERSION" > "$STATE/installed-device-version"
+rm -f "$STATE/available-device-version"
 log "installed signed device manifest $VERSION ($INSTALLED)"
 dbus-send --system /default com.lab126.powerd.resuming int32:1 >/dev/null 2>&1 || true
 exit 0

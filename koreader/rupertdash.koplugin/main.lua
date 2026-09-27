@@ -72,6 +72,7 @@ function RupertDash:onPageUpdate(page)
     local read = self:looksRead()
     if read then
         self:recordFinished("reached final pages")
+        self:offerQuestions()
     elseif (self.page_turns or 0) >= MIN_PAGE_TURNS and not self.finish_check_scheduled then
         self.finish_check_scheduled = true
         local file = self.ui.document.file
@@ -81,6 +82,7 @@ function RupertDash:onPageUpdate(page)
                 and self.last_page and self.ui.document:getPageCount() > 0
                 and self.last_page / self.ui.document:getPageCount() >= FINISHED_FRACTION then
                 self:recordFinished("read final pages")
+                self:offerQuestions()
             end
         end)
     end
@@ -121,10 +123,24 @@ function RupertDash:recordFinished(reason)
     end
 end
 
+function RupertDash:offerQuestions()
+    if self.quiz_shown or not self.ui.document then return end
+    local id = State.missionIdForFile(self.ui.document.file)
+    if not id then return end
+    local Quiz = require("rupertquiz")
+    local data = Quiz.load(id)
+    if not data then return end
+    self.quiz_shown = true
+    UIManager:nextTick(function()
+        if self.ui.document then UIManager:show(Quiz:new{ id = id, data = data }, "full") end
+    end)
+end
+
 -- Do not return true from either: other handlers (the end-of-book dialog,
 -- settings flushing) still need these events.
 function RupertDash:onEndOfBook()
     self:recordFinished("end of book")
+    if self:looksRead() then self:offerQuestions() end
 end
 
 return RupertDash

@@ -77,16 +77,42 @@ end
 
 local readProperties = State.readProperties
 
+local function firstLine(path)
+    local f = io.open(path, "r")
+    if not f then return nil end
+    local line = f:read("*l")
+    f:close()
+    return line
+end
+
 -- Today's mission is on the dashboard already, and the archived copy of it is
 -- the version it replaced, so leave it out of previous missions.
 local function archivedMissions(current_id)
     local missions = {}
-    if lfs.attributes(ARCHIVE_DIR, "mode") ~= "directory" then return missions end
-    for name in lfs.dir(ARCHIVE_DIR) do
-        local id = name:match("^(.+)%.mobi$")
-        if id and id ~= current_id then
-            local props = readProperties(ARCHIVE_DIR .. "/" .. id .. ".properties")
-            table.insert(missions, { id = id, title = props.title or id, file = ARCHIVE_DIR .. "/" .. name })
+    if lfs.attributes(ARCHIVE_DIR, "mode") == "directory" then
+        for name in lfs.dir(ARCHIVE_DIR) do
+            local id = name:match("^(%d%d%d%d%-%d%d%-%d%d)%.mobi$")
+            if id and id ~= current_id then
+                local props = readProperties(ARCHIVE_DIR .. "/" .. id .. ".properties")
+                table.insert(missions, { id = id, title = props.title or id, file = ARCHIVE_DIR .. "/" .. name })
+            end
+        end
+    end
+    local big_dir = State.BIGREAD_ARCHIVE_DIR
+    if lfs.attributes(big_dir, "mode") == "directory" then
+        for id in lfs.dir(big_dir) do
+            if id:match("^%d%d%d%d%-%d%d%-%d%d$") then
+                local path = big_dir .. "/" .. id
+                local f = io.open(path .. "/story.json", "r")
+                if f then
+                    local ok, story = pcall(require("json").decode, f:read("*a"))
+                    f:close()
+                    if ok and type(story) == "table" then
+                        table.insert(missions, { id = id, title = story.title or id,
+                            bigread = true, directory = path, cover = story.cover })
+                    end
+                end
+            end
         end
     end
     table.sort(missions, function(a, b) return a.id > b.id end)
@@ -438,7 +464,7 @@ function Dashboard:buildRightColumn(width, height)
         { ICON.compass, "FACT FILES", function() self:comingSoon("Fact Files") end },
         { ICON.chart, "MY PROGRESS", function() self:showProgress() end },
         { ICON.trophy, "UNLOCKS", function() self:showUnlocks() end },
-        { ICON.cog, "SETTINGS", function() self:onShowSettings() end },
+        { ICON.cog, firstLine(State.STATE_DIR .. "/available-device-version") and "UPDATE READY" or "SETTINGS", function() self:onShowSettings() end },
     }
     local gap = 4
     local tile_h = math.floor((height - streak_h - gap * #entries) / #entries)
@@ -523,7 +549,7 @@ function Dashboard:bigReadLabel()
     local id = State.bigReadId()
     if not id then return "BIG READ" end
     if State.bigReadFinished(id) then return "BIG READ  \u{E82B}" end
-    return State.bigReadProgress(id) and "BIG READ - CARRY ON" or "BIG READ - NEW"
+    return State.bigReadProgress(id) and "BIG READ - CARRY ON" or "NEW READ"
 end
 
 function Dashboard:openBigRead()
@@ -547,7 +573,14 @@ function Dashboard:showPrevious()
     local Archive = require("rupertarchive")
     UIManager:show(Archive:new{
         missions = self.archive,
-        on_open = function(file) self:openBook(file) end,
+        on_open = function(mission)
+            if mission.bigread then
+                local BigRead = require("rupertbigread")
+                local story, problem = BigRead.load(mission.directory, mission.id)
+                if story then UIManager:show(BigRead:new{ story = story }, "full")
+                else UIManager:show(InfoMessage:new{ text = problem }) end
+            else self:openBook(mission.file) end
+        end,
     }, "full")
 end
 
@@ -555,9 +588,9 @@ function Dashboard:showProgress()
     local streak = State.streak(self.props.id)
     local finished = State.completedCount()
     UIManager:show(InfoMessage:new{
-        text = string.format("Available points: %d\nEarned: %d\nSpent on unlocks: %d\nDaily missions: %d x 1\nBig Reads: %d x 3\nStreak: %d day%s\nToday's mission: %s",
+        text = string.format("Available points: %d\nEarned: %d\nSpent on unlocks: %d\nDaily missions: %d x 1\nBig Reads: %d x 3\n5-day streak bonuses: %d points\nStreak: %d day%s\nToday's mission: %s",
             State.availablePoints(), State.points(), State.spentPoints(), finished, State.bigReadCompletedCount(),
-            streak, streak == 1 and "" or "s",
+            State.streakBonus(), streak, streak == 1 and "" or "s",
             self.finished_today and "finished" or "not finished yet"),
     })
 end
@@ -572,13 +605,26 @@ function Dashboard:comingSoon(name)
 end
 
 function Dashboard:onShowSettings()
+    local available = firstLine(State.STATE_DIR .. "/available-device-version")
+    local installed = firstLine(State.STATE_DIR .. "/installed-device-version") or "33 or earlier"
     local dialog
     dialog = ButtonDialog:new{
-        title = "Settings",
+        title = "Settings  |  Version " .. installed .. (available and "  |  UPDATE " .. available .. " READY" or ""),
         buttons = {
-            { { text = "Refresh", callback = function()
+            { { text = available and ("INSTALL UPDATE " .. available) or "CHECK FOR UPDATE", callback = function()
                 UIManager:close(dialog)
-                self:refresh()
+                if not available then
+                    UIManager:show(InfoMessage:new{ text = "Checking for updates. Open Settings again in a moment." })
+                    os.execute("/bin/sh /usr/local/rupert/sync.sh --scheduled >/dev/null 2>&1 &")
+                    return
+                end
+                UIManager:show(InfoMessage:new{ text = "Installing the signed update. Keep the Kindle awake; then exit and reopen KOReader." })
+                os.execute("/bin/sh /usr/local/rupert/sync.sh --install-update >/dev/null 2>&1 &")
+            end } },
+            { { text = "Refresh books and stories", callback = function()
+                UIManager:close(dialog)
+                os.execute("/bin/sh /usr/local/rupert/sync.sh --scheduled >/dev/null 2>&1 &")
+                UIManager:show(InfoMessage:new{ text = "Checking for new books. Reopen the dashboard in a moment." })
             end } },
             { { text = "Open file browser", callback = function()
                 UIManager:close(dialog)

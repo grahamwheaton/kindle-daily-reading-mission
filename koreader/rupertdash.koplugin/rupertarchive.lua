@@ -132,11 +132,14 @@ function Archive:build()
 end
 
 function Archive:buildTile(mission, width, height)
-    local done = State.isCompleted(mission.id)
-    local label_h = 78
+    local done = mission.bigread and State.bigReadFinished(mission.id) or State.isCompleted(mission.id)
+    local finished = State.finishedDate(mission.id, mission.bigread)
+    local label_h = 105
     local image_h = height - label_h - 10
 
-    local cover_file = State.coverFor(mission.file, mission.id)
+    local cover_file = mission.bigread and mission.cover and mission.directory .. "/" .. mission.cover
+        or (not mission.bigread and State.coverFor(mission.file, mission.id))
+    if cover_file and not require("libs/libkoreader-lfs").attributes(cover_file, "mode") then cover_file = nil end
     local picture
     if cover_file then
         local native = ImageWidget:new{ file = cover_file, file_do_cache = false, scale_factor = 1 }
@@ -153,7 +156,7 @@ function Archive:buildTile(mission, width, height)
             align = "center",
             TextWidget:new{ text = ICON_DONE, face = symbols(18) },
             HorizontalSpan:new{ width = 4 },
-            TextWidget:new{ text = "Completed", face = bold(14) },
+            TextWidget:new{ text = "Read " .. (finished or ""), face = bold(14) },
         }
         or TextWidget:new{ text = "Not completed", face = regular(14), fgcolor = Blitbuffer.gray(0.45) }
 
@@ -176,6 +179,7 @@ function Archive:buildTile(mission, width, height)
                 height_adjust = true,
                 height_overflow_show_ellipsis = true,
             },
+            TextWidget:new{ text = (mission.bigread and "BIG READ  |  " or "MISSION  |  ") .. mission.id:sub(1, 10), face = regular(12) },
             CenterContainer:new{ dimen = Geom:new{ w = width - 22, h = 22 }, status },
         },
     }
@@ -187,7 +191,7 @@ function Archive:buildTile(mission, width, height)
             -- archive's status labels were built before opening the book, so
             -- discard this screen and rebuild them on the next visit.
             UIManager:close(self)
-            if self.on_open then self.on_open(mission.file) end
+            if self.on_open then self.on_open(mission) end
         end,
     }
 end
