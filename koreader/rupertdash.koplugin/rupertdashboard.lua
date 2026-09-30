@@ -617,13 +617,9 @@ function Dashboard:onShowSettings()
                 UIManager:close(dialog)
                 self:showTodayQuestions()
             end } },
-            { { text = available and ("INSTALL UPDATE " .. available) or "CHECK FOR UPDATE", callback = function()
+            { { text = available and ("CHECK & INSTALL UPDATE " .. available) or "CHECK & INSTALL UPDATE", callback = function()
                 UIManager:close(dialog)
-                if not available then
-                    self:checkForUpdate()
-                    return
-                end
-                self:installUpdate(available)
+                self:checkForUpdate()
             end } },
             { { text = "Refresh books and stories", callback = function()
                 UIManager:close(dialog)
@@ -684,11 +680,14 @@ function Dashboard:checkForUpdate()
         end
         UIManager:close(waiting)
         if result == "available" then
-            self:refresh()
-            UIManager:nextTick(function()
-                if Dashboard.instance then Dashboard.instance:onShowSettings() end
-            end)
+            local version = firstLine(State.STATE_DIR .. "/available-device-version")
+            if version and version:match("^%d+$") then
+                self:installUpdate(version)
+            else
+                UIManager:show(InfoMessage:new{ text = "The signed update check returned no version. Try again." })
+            end
         elseif result == "current" then
+            self:refresh()
             UIManager:show(InfoMessage:new{ text = "The Kindle is up to date." })
         elseif result == "offline" then
             UIManager:show(InfoMessage:new{ text = "Wi-Fi did not connect. Try the check again." })
