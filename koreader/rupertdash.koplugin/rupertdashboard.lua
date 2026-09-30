@@ -702,7 +702,9 @@ end
 
 function Dashboard:installUpdate(version)
     local marker = State.STATE_DIR .. "/install-finished"
+    local result_path = State.STATE_DIR .. "/install-result"
     os.remove(marker)
+    os.remove(result_path)
     local waiting
     local attempts = 0
     local function poll()
@@ -718,9 +720,22 @@ function Dashboard:installUpdate(version)
             self:onExitToKindle()
             return
         end
-        if firstLine(marker) or attempts >= 150 then
+        if firstLine(marker) or attempts >= 450 then
             if waiting then UIManager:close(waiting) end
-            UIManager:show(InfoMessage:new{ text = "Update did not install. Check Wi-Fi and try again. Details: rupert-mission/update.log" })
+            local reason = firstLine(result_path)
+            local details = {
+                busy = "Another sync was running. Try again in a minute.",
+                wifi = "Wi-Fi did not connect. Try again with the Kindle awake.",
+                network = "The update download failed. Check Wi-Fi and try again.",
+                bundle = "The signed bundle could not be downloaded or verified.",
+                signature = "The update signature was rejected.",
+                prerequisites = "The Kindle is missing an update component.",
+                files = "The update files could not be installed.",
+            }
+            UIManager:show(InfoMessage:new{
+                text = (details[reason] or "Update did not install. Check Wi-Fi and try again.")
+                    .. " Details: rupert-mission/update.log",
+            })
             return
         end
         if attempts % 2 == 0 then

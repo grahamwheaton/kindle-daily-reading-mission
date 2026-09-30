@@ -26,6 +26,7 @@ CURL="$RUNTIME/curl"
 CA="$RUNTIME/cacert.pem"
 PUB="$RUNTIME/device-update-public.pem"
 LOG="$STATE/update.log"
+RESULT="$STATE/install-result"
 WORK=/var/tmp/rupert-device-update
 LOCK=/var/tmp/rupert-device-update.lock
 
@@ -43,23 +44,31 @@ mkdir "$LOCK" 2>/dev/null || exit 0
 trap 'rm -rf "$WORK"; rmdir "$LOCK" 2>/dev/null' EXIT
 rm -rf "$WORK"
 mkdir -p "$WORK" "$STATE"
+[ "$1" = "--install" ] && echo running > "$RESULT"
 
 log() { echo "$(date) $*" >> "$LOG"; }
 fetch() {
-    "$CURL" --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-        --connect-timeout 20 --max-time 180 --cacert "$CA" -o "$1" "$2"
+    ATTEMPT=0
+    while [ "$ATTEMPT" -lt 3 ]; do
+        "$CURL" --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --connect-timeout 20 --max-time 180 --cacert "$CA" -o "$1" "$2" && return 0
+        ATTEMPT=$((ATTEMPT + 1))
+        [ "$ATTEMPT" -lt 3 ] && sleep 3
+    done
+    return 1
 }
 digest() { /usr/bin/openssl dgst -sha256 "$1" 2>/dev/null | awk '{print $NF}'; }
 field() { sed -n "s/^$1=//p" "$WORK/manifest.txt" | head -1; }
 valid_hash() { echo "$1" | grep -q '^[0-9A-Fa-f]\{64\}$'; }
 lower() { echo "$1" | tr A-F a-f; }
 
-[ -x "$CURL" ] && [ -f "$CA" ] && [ -f "$PUB" ] || { log 'updater prerequisites missing'; echo error > "$STATE/update-check-result"; exit 0; }
-fetch "$WORK/manifest.txt" "$BASE/manifest.txt" >> "$LOG" 2>&1 || { log 'manifest download failed'; echo error > "$STATE/update-check-result"; exit 0; }
-fetch "$WORK/manifest.sig" "$BASE/manifest.sig" >> "$LOG" 2>&1 || { log 'manifest signature download failed'; echo error > "$STATE/update-check-result"; exit 0; }
+[ -x "$CURL" ] && [ -f "$CA" ] && [ -f "$PUB" ] || { log 'updater prerequisites missing'; echo error > "$STATE/update-check-result"; echo prerequisites > "$RESULT"; exit 0; }
+fetch "$WORK/manifest.txt" "$BASE/manifest.txt" >> "$LOG" 2>&1 || { log 'manifest download failed'; echo error > "$STATE/update-check-result"; echo network > "$RESULT"; exit 0; }
+fetch "$WORK/manifest.sig" "$BASE/manifest.sig" >> "$LOG" 2>&1 || { log 'manifest signature download failed'; echo error > "$STATE/update-check-result"; echo network > "$RESULT"; exit 0; }
 
 if ! /usr/bin/openssl dgst -sha256 -verify "$PUB" -signature "$WORK/manifest.sig" "$WORK/manifest.txt" >> "$LOG" 2>&1; then
     log 'manifest signature rejected'
+    echo signature > "$RESULT"
     echo error > "$STATE/update-check-result"
     exit 0
 fi
@@ -71,7 +80,7 @@ if [ "$MANIFEST_HASH" = "$(cat "$STATE/last-device-manifest.sha256" 2>/dev/null)
     # hash, but no human-readable version file. Backfill it from the signed
     # manifest on the next check so Settings does not show an old version.
     case "$VERSION" in
-        *[!0-9]*|'') log 'signed manifest has invalid version'; echo error > "$STATE/update-check-result"; exit 0 ;;
+        *[!0-9]*|'') log 'signed manifest has invalid version'; echo invalid-version > "$RESULT"; echo error > "$STATE/update-check-result"; exit 0 ;;
         *) echo "$VERSION" > "$STATE/installed-device-version" ;;
     esac
     rm -f "$STATE/available-device-version"
@@ -183,8 +192,8 @@ install_named_files() {
 install_bundle
 case $? in
     0) INSTALLED=bundle ;;
-    2) exit 0 ;;                       # the bundle was there but unusable
-    *) install_named_files || exit 0   # an older manifest, named files
+    2) echo bundle > "$RESULT"; exit 0 ;;    # signed bundle was unusable
+    *) install_named_files || { echo files > "$RESULT"; exit 0; }
        INSTALLED=files ;;
 esac
 
@@ -192,5 +201,6 @@ echo "$MANIFEST_HASH" > "$STATE/last-device-manifest.sha256"
 echo "$VERSION" > "$STATE/installed-device-version"
 rm -f "$STATE/available-device-version"
 log "installed signed device manifest $VERSION ($INSTALLED)"
+echo installed > "$RESULT"
 dbus-send --system /default com.lab126.powerd.resuming int32:1 >/dev/null 2>&1 || true
 exit 0
